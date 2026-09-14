@@ -4,7 +4,7 @@ Local-first iPhone workspace for knitters and crocheters to keep pattern PDFs be
 
 ## Status
 
-**Documentation/backlog scaffold only.** No Xcode project, running app, build/test result, TestFlight binary, or dual-screen device compatibility is claimed yet. See [PLAN.md](PLAN.md) and the [seven implementation issues](https://github.com/rwrife/row-companion/issues).
+**iOS bootstrap source and CI wiring.** The repository contains the native Xcode project, shared scheme, SwiftUI launch placeholder, unit test, and XCUITest launch smoke. Pattern import, persistence, and counters are not implemented yet. Native acceptance requires the exact-head macOS CI result; Linux helper tests are not iOS build evidence. See [PLAN.md](PLAN.md) and [issue #1](https://github.com/rwrife/row-companion/issues/1).
 
 ## Why / who
 
@@ -45,20 +45,57 @@ Not MVP: automatic stitch recognition, pattern generation, OCR, audio/voice cont
 
 ## Development quickstart
 
-Today: clone this repository and read PLAN.md; implementation starts with issue #1. There is no build command for the scaffold itself.
-
-After #1 lands on a Mac with Xcode 26.0, the required repeatable commands will be:
+Host-capable verification (Python 3 standard library; no app dependencies):
 
 ```sh
-xcodebuild -version
-xcrun --sdk iphoneos --show-sdk-version
-xcodebuild -list -project RowCompanion.xcodeproj
-# Choose an installed iOS 26 simulator UDID from xcrun simctl list devices available:
-xcodebuild -project RowCompanion.xcodeproj -scheme RowCompanion \
-  -destination 'platform=iOS Simulator,id=<SIMULATOR_UDID>' test
+python3 -m unittest discover -s Tests -v
+bash -n Scripts/ci_native.sh
 ```
 
-These are the planned project/scheme names, not existing artifacts. Linux cannot run Xcode; executors must obtain real macOS CI output, never substitute source inspection for iOS build evidence.
+On a Mac with **Xcode 26.0** installed:
+
+```sh
+export DEVELOPER_DIR=/Applications/Xcode_26.0.app/Contents/Developer
+python3 Scripts/ci_support.py check-toolchain
+xcodebuild -list -project RowCompanion.xcodeproj
+bash Scripts/ci_native.sh simulator-test
+bash Scripts/ci_native.sh device-build
+python3 Scripts/ci_support.py export-summary \
+  --result-bundle artifacts/RowCompanion.xcresult \
+  --output artifacts/evidence/xcresult-summary.json
+```
+
+The toolchain check prints Xcode/build and iphoneos SDK versions and rejects any
+Xcode other than 26.0 or SDK below 26. The test wrapper deterministically selects
+an installed, available iOS 26 iPhone simulator by UDID (no hardcoded device name),
+runs both the unit test and UI launch smoke, and disables signing. The generic
+iOS build is also unsigned; it is not installable release/TestFlight evidence.
+For a repeat local test run, set `RESULT_BUNDLE` to a new `.xcresult` path so
+Xcode never overwrites previous evidence. Use that same path when exporting.
+
+CI runs the same commands on `macos-15`, fails closed if the pinned Xcode is no
+longer installed, and never substitutes a newer Xcode silently. The committed
+`.xcodeproj` is source configuration, not a generated build artifact.
+
+**Hosted toolchain blocker (2026-09-14):** [run 34855094155](https://github.com/rwrife/row-companion/actions/runs/34855094155)
+reported `Xcode 26.0.1`, build `17A400`, SDK `26.0` at the `Xcode_26.0.app`
+path. The directory name is not proof of the installed version. The strict
+26.0 gate correctly failed; simulator tests and the unsigned build did not run.
+CI now prints installed Xcode versions before checking the selected toolchain.
+Supply an actual Xcode 26.0 installation to unblock this pin; accepting another
+version requires an explicit contract/pin-update PR and fresh native evidence,
+not a relaxed prefix check or a successful Linux test. No signing credentials
+are needed or accessed by these unsigned checks.
+
+**Evidence limitation / open issue #1 gate:** CI publishes only an allowlisted
+aggregate JSON export from the real xcresult, with tested checkout SHA (the exact
+PR head, not GitHub's synthetic merge ref), Xcode/SDK versions, and SHA-256 checksum. Arbitrary
+test messages, paths, screenshots, attachments, and diagnostics are not uploaded.
+The raw `.xcresult` remains on the ephemeral runner. A reviewed, sanitized **full
+xcresult bundle** retention path is not implemented; therefore the complete
+issue is not claimed closed even if these CI jobs pass. The host tests verify
+helper behavior and structural contracts, not Xcode project compilation, launch,
+physical-device accessibility, or signing. No fabricated native result is used.
 
 ## Signing and distribution
 

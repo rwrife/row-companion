@@ -1,0 +1,75 @@
+name: CI
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  host-contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Test CI helpers and project contracts (not iOS evidence)
+        run: python3 -m unittest discover -s Tests -v
+      - name: Shell syntax
+        run: bash -n Scripts/ci_native.sh
+  ios:
+    name: Xcode 26.0 simulator tests and unsigned iOS build
+    runs-on: macos-15
+    timeout-minutes: 45
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.0.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Record tested commit and diagnose installed Xcode aliases
+        run: |
+          git rev-parse HEAD
+          for developer in /Applications/Xcode*.app/Contents/Developer; do
+            test -d "$developer" || continue
+            printf 'Installed developer directory: %s\n' "$developer"
+            if ! DEVELOPER_DIR="$developer" xcodebuild -version; then
+              printf 'Unable to inspect this installed Xcode; strict selected-toolchain gate follows.\n'
+            fi
+          done
+      - name: Require pinned installed Xcode and SDK
+        run: |
+          if ! test -d "$DEVELOPER_DIR"; then
+            printf 'Required Xcode 26.0 developer directory is missing: %s\n' "$DEVELOPER_DIR" >&2
+            exit 1
+          fi
+          python3 Scripts/ci_support.py check-toolchain
+          plutil -lint RowCompanion.xcodeproj/project.pbxproj
+          xcodebuild -list -project RowCompanion.xcodeproj
+      - name: Unit and launch smoke tests on installed simulator UDID
+        id: native-tests
+        run: bash Scripts/ci_native.sh simulator-test
+      - name: Unsigned generic iOS build
+        if: ${{ !cancelled() && steps.native-tests.outcome != 'skipped' }}
+        run: bash Scripts/ci_native.sh device-build
+      - name: Export allowlisted xcresult summary with tested commit
+        if: ${{ !cancelled() && steps.native-tests.outcome != 'skipped' }}
+        run: |
+          python3 Scripts/ci_support.py export-summary \
+            --result-bundle artifacts/RowCompanion.xcresult \
+            --output artifacts/evidence/xcresult-summary.json
+          shasum -a 256 artifacts/evidence/xcresult-summary.json > artifacts/evidence/SHA256SUMS
+      - name: Retain sanitized summary only (raw bundle is not published)
+        if: ${{ !cancelled() && steps.native-tests.outcome != 'skipped' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        env:
+          FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+        with:
+          name: xcresult-summary-${{ github.sha }}
+          path: artifacts/evidence/
+          if-no-files-found: error
+          retention-days: 14
