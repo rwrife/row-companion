@@ -14,7 +14,8 @@ import uuid
 
 def validate_versions(xcode, sdk):
     if xcode.splitlines()[0:1] != ['Xcode 26.0']:
-        raise ValueError('Xcode 26.0 is required exactly')
+        observed = xcode.splitlines()[0] if xcode else '(missing)'
+        raise ValueError('Xcode 26.0 is required exactly; observed ' + observed)
     if not re.fullmatch(r'\d+\.\d+(?:\.\d+)?', sdk.strip()):
         raise ValueError('Invalid iOS SDK version')
     if int(sdk.split('.')[0]) < 26:

@@ -23,6 +23,11 @@ class CISupportTests(unittest.TestCase):
             with self.subTest(xcode=xcode, sdk=sdk), self.assertRaises(ValueError):
                 self.support.validate_versions(xcode, sdk)
 
+    def test_patch_alias_is_rejected_with_actual_version(self):
+        # Real hosted failure: Xcode_26.0.app reported 26.0.1 (17A400).
+        with self.assertRaisesRegex(ValueError, r'required exactly; observed Xcode 26\.0\.1'):
+            self.support.validate_versions('Xcode 26.0.1\nBuild version 17A400', '26.0')
+
     def test_selects_available_ios26_phone_by_udid(self):
         payload = {'devices': {
             'com.apple.CoreSimulator.SimRuntime.iOS-18-5': [

@@ -77,9 +77,19 @@ CI runs the same commands on `macos-15`, fails closed if the pinned Xcode is no
 longer installed, and never substitutes a newer Xcode silently. The committed
 `.xcodeproj` is source configuration, not a generated build artifact.
 
+**Hosted toolchain blocker (2026-09-14):** [run 34855094155](https://github.com/rwrife/row-companion/actions/runs/34855094155)
+reported `Xcode 26.0.1`, build `17A400`, SDK `26.0` at the `Xcode_26.0.app`
+path. The directory name is not proof of the installed version. The strict
+26.0 gate correctly failed; simulator tests and the unsigned build did not run.
+CI now prints installed Xcode versions before checking the selected toolchain.
+Supply an actual Xcode 26.0 installation to unblock this pin; accepting another
+version requires an explicit contract/pin-update PR and fresh native evidence,
+not a relaxed prefix check or a successful Linux test. No signing credentials
+are needed or accessed by these unsigned checks.
+
 **Evidence limitation / open issue #1 gate:** CI publishes only an allowlisted
-aggregate JSON export from the real xcresult, with tested checkout SHA (the PR
-merge ref when applicable), Xcode/SDK versions, and SHA-256 checksum. Arbitrary
+aggregate JSON export from the real xcresult, with tested checkout SHA (the exact
+PR head, not GitHub's synthetic merge ref), Xcode/SDK versions, and SHA-256 checksum. Arbitrary
 test messages, paths, screenshots, attachments, and diagnostics are not uploaded.
 The raw `.xcresult` remains on the ephemeral runner. A reviewed, sanitized **full
 xcresult bundle** retention path is not implemented; therefore the complete

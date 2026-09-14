@@ -2,7 +2,7 @@
 
 ## Scope and architecture
 
-A single-device, local-first craft workspace for knitting/crochet pattern reference and reversible per-piece progress. Standard iOS app with optional adaptive tablet layout; iPhone Duo is a future dual-screen design target, not an SDK dependency. No application source or test suite exists in this initial scaffold.
+A single-device, local-first craft workspace for knitting/crochet pattern reference and reversible per-piece progress. Standard iOS app with optional adaptive tablet layout; iPhone Duo is a future dual-screen design target, not an SDK dependency. Native bootstrap source and launch tests are present on the implementation branch; executable iOS acceptance remains gated by real pinned-toolchain CI.
 
 ### Technology / pinned platform contract
 

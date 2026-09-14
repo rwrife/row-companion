@@ -15,6 +15,7 @@ jobs:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
           persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Test CI helpers and project contracts (not iOS evidence)
         run: python3 -m unittest discover -s Tests -v
       - name: Shell syntax
@@ -29,9 +30,23 @@ jobs:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
           persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Record tested commit and diagnose installed Xcode aliases
+        run: |
+          git rev-parse HEAD
+          for developer in /Applications/Xcode*.app/Contents/Developer; do
+            test -d "$developer" || continue
+            printf 'Installed developer directory: %s\n' "$developer"
+            if ! DEVELOPER_DIR="$developer" xcodebuild -version; then
+              printf 'Unable to inspect this installed Xcode; strict selected-toolchain gate follows.\n'
+            fi
+          done
       - name: Require pinned installed Xcode and SDK
         run: |
-          test -d "$DEVELOPER_DIR"
+          if ! test -d "$DEVELOPER_DIR"; then
+            printf 'Required Xcode 26.0 developer directory is missing: %s\n' "$DEVELOPER_DIR" >&2
+            exit 1
+          fi
           python3 Scripts/ci_support.py check-toolchain
           plutil -lint RowCompanion.xcodeproj/project.pbxproj
           xcodebuild -list -project RowCompanion.xcodeproj

@@ -42,6 +42,17 @@ class ProjectContractTests(unittest.TestCase):
         self.assertIn('CODE_SIGNING_ALLOWED=NO build', script)
         self.assertIn('platform=iOS Simulator,id=$UDID', script)
 
+    def test_ci_records_exact_head_and_diagnoses_alias_before_pin_check(self):
+        workflow = (ROOT / '.github/workflows/ci.yml').read_text()
+        self.assertEqual(workflow.count('ref: ${{ github.event.pull_request.head.sha || github.sha }}'), 2)
+        self.assertIn('git rev-parse HEAD', workflow)
+        inventory = workflow.index('for developer in /Applications/Xcode*.app/Contents/Developer; do')
+        gate = workflow.index('python3 Scripts/ci_support.py check-toolchain')
+        self.assertLess(inventory, gate)
+        self.assertIn('DEVELOPER_DIR="$developer" xcodebuild -version', workflow)
+        self.assertNotIn('continue-on-error:', workflow)
+        self.assertNotIn('sudo xcode-select', workflow)
+
     def test_launch_contract_matches_app_accessibility_identifiers(self):
         app = (ROOT / 'RowCompanion/ContentView.swift').read_text()
         smoke = (ROOT / 'RowCompanionUITests/RowCompanionUITests.swift').read_text()
