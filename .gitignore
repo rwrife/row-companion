@@ -1,0 +1,28 @@
+# Xcode / Swift generated state
+.DS_Store
+.build/
+DerivedData/
+build/
+artifacts/
+*.xcresult
+xcuserdata/
+*.xcuserstate
+.swiftpm/
+# Local credentials and signing material (never commit)
+.env
+.env.*
+!.env.example
+*.p8
+*.p12
+*.mobileprovision
+# Private runtime data and imported patterns
+local-data/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+# Editor / temporary outputs
+.vscode/
+.idea/
+*.tmp
+*.log
+# Keep project sources, Package.resolved, fixtures and docs visible.
