@@ -23,7 +23,7 @@ Examples: repeat an eight-row scarf motif without mental modulo arithmetic; resu
 
 ## Platforms and two-pane design
 
-- Required primary platform: **iOS**, built with the **iOS 26 SDK or newer**. Initial toolchain pin: **Xcode 26.0**, Swift 6 language mode; deployment target iOS 26.0. CI must check `xcodebuild -version` and `xcrun --sdk iphoneos --show-sdk-version` and fail below SDK 26. Updates to the pin must be explicit and revalidated.
+- Required primary platform: **iOS**, built with the **iOS 26 SDK or newer**. Toolchain pin: **Xcode 26.0.1 (build 17A400)** — an explicit update from the initial Xcode 26.0 pin after hosted evidence showed exact 26.0 is no longer installed on hosted macOS runners — Swift 6 language mode; deployment target iOS 26.0. CI must check `xcodebuild -version` and `xcrun --sdk iphoneos --show-sdk-version` and fail below SDK 26. Updates to the pin must be explicit and revalidated.
 - SwiftUI standard iPhone app; **optional iPad/regular-width adaptive tablet view**. Android and desktop are outside MVP.
 - **iPhone Duo dual-screen design target**, not a claim of available hardware or native SDK compatibility: one display would keep the chart visible while the other holds the piece selector, repeat status, notes, and large controls. On current compact layouts, the PDF and controls share a screen with an expandable notes section; regular-width layouts show reference and controls side by side.
 - One `WorkspaceLayout` boundary chooses arrangement from available width and accessibility needs. Durable project/piece state is independent of view identity. Later native dual-screen APIs may feed safe regions into that boundary; no hinge sensor, fold detection, external display, or unavailable SDK API is required now. Rotation/resize must not create a row event or reset a viewport.
@@ -52,10 +52,10 @@ python3 -m unittest discover -s Tests -v
 bash -n Scripts/ci_native.sh
 ```
 
-On a Mac with **Xcode 26.0** installed:
+On a Mac with **Xcode 26.0.1 (build 17A400)** installed:
 
 ```sh
-export DEVELOPER_DIR=/Applications/Xcode_26.0.app/Contents/Developer
+export DEVELOPER_DIR=/Applications/Xcode_26.0.1.app/Contents/Developer
 python3 Scripts/ci_support.py check-toolchain
 xcodebuild -list -project RowCompanion.xcodeproj
 bash Scripts/ci_native.sh simulator-test
@@ -66,7 +66,8 @@ python3 Scripts/ci_support.py export-summary \
 ```
 
 The toolchain check prints Xcode/build and iphoneos SDK versions and rejects any
-Xcode other than 26.0 or SDK below 26. The test wrapper deterministically selects
+Xcode other than exactly 26.0.1 build 17A400, or any SDK below 26. The test wrapper
+deterministically selects
 an installed, available iOS 26 iPhone simulator by UDID (no hardcoded device name),
 runs both the unit test and UI launch smoke, and disables signing. The generic
 iOS build is also unsigned; it is not installable release/TestFlight evidence.
@@ -77,15 +78,22 @@ CI runs the same commands on `macos-15`, fails closed if the pinned Xcode is no
 longer installed, and never substitutes a newer Xcode silently. The committed
 `.xcodeproj` is source configuration, not a generated build artifact.
 
-**Hosted toolchain blocker (2026-09-14):** [run 34855094155](https://github.com/rwrife/row-companion/actions/runs/34855094155)
+**Pin update history (2026-09-14 → 2026-09-16):** the initial pin required exact
+`Xcode 26.0`, and hosted [run 34855094155](https://github.com/rwrife/row-companion/actions/runs/34855094155)
 reported `Xcode 26.0.1`, build `17A400`, SDK `26.0` at the `Xcode_26.0.app`
-path. The directory name is not proof of the installed version. The strict
-26.0 gate correctly failed; simulator tests and the unsigned build did not run.
-CI now prints installed Xcode versions before checking the selected toolchain.
-Supply an actual Xcode 26.0 installation to unblock this pin; accepting another
-version requires an explicit contract/pin-update PR and fresh native evidence,
-not a relaxed prefix check or a successful Linux test. No signing credentials
-are needed or accessed by these unsigned checks.
+path. The directory name is not proof of the installed version, so the strict
+gate correctly failed and simulator tests and the unsigned build did not run.
+An exact-head rerun on 2026-09-16
+([attempt 3](https://github.com/rwrife/row-companion/actions/runs/34867523105/attempts/3))
+enumerated every installed Xcode (16.0–16.4, 26.0.1, 26.1.1, 26.2, 26.3) and
+confirmed no exact 26.0 (17A324) remains hosted anywhere on the runner image;
+the image manifest only ships `Xcode_26.0.1.app` aliased as `Xcode_26.0.app`,
+and there are no self-hosted runners. Rather than relax to a prefix match or
+silently substitute a newer toolchain, this PR makes the explicit pin update
+PLAN.md requires: exact `Xcode 26.0.1` **plus exact build `17A400`**, still
+failing closed on every other version and on SDK < 26. Any future pin change
+must likewise be an explicit PR with fresh native evidence. No signing
+credentials are needed or accessed by these unsigned checks.
 
 **Evidence limitation / open issue #1 gate:** CI publishes only an allowlisted
 aggregate JSON export from the real xcresult, with tested checkout SHA (the exact

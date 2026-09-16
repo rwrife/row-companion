@@ -7,8 +7,8 @@ A single-device, local-first craft workspace for knitting/crochet pattern refere
 ### Technology / pinned platform contract
 
 - Swift 6 language mode, SwiftUI UI, PDFKit viewer, SwiftData local persistence (CloudKit disabled), Foundation Codable/CryptoKit backup validation. Native frameworks minimize dependencies and permission surface.
-- **Xcode 26.0** initial pin; **iOS 26 SDK or newer** mandatory for simulator and device/archive CI. Deployment target iOS 26.0. Commit the Xcode project and shared RowCompanion scheme; use no project generator in MVP.
-- CI selects an explicitly installed Xcode 26.0 on a compatible macOS runner, records full Xcode/SDK versions, fails closed if absent, and enumerates an installed iOS 26 simulator. Pin updates require a PR and new evidence. Linux tests/static checks are never iOS build evidence.
+- **Xcode 26.0.1 (build 17A400)** pin — explicitly updated 2026-09-16 from the initial Xcode 26.0 pin after exact-head hosted CI proved no hosted macOS runner image still installs exact 26.0 (the `Xcode_26.0.app` alias executes 26.0.1); **iOS 26 SDK or newer** mandatory for simulator and device/archive CI. Deployment target iOS 26.0. Commit the Xcode project and shared RowCompanion scheme; use no project generator in MVP.
+- CI selects an explicitly installed Xcode 26.0.1 build 17A400 on a compatible macOS runner, records full Xcode/build/SDK versions, fails closed if absent or different, and enumerates an installed iOS 26 simulator. Pin updates require a PR and new evidence. Linux tests/static checks are never iOS build evidence.
 - Proposed source boundaries: `Domain/` pure row reducer and validation; `Persistence/` transactional repository; `Documents/` bounded PDF copier/view state; `Features/Workspace/` UI; `Backup/` versioned folder format; `Tests/` unit/integration; `UITests/` simulator journeys. Domain stays independent of SwiftUI/PDFKit.
 
 ### Local data and row semantics

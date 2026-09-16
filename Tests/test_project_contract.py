@@ -30,7 +30,7 @@ class ProjectContractTests(unittest.TestCase):
 
     def test_ci_wires_native_commands_and_does_not_upload_raw_bundles(self):
         workflow = (ROOT / '.github/workflows/ci.yml').read_text()
-        self.assertIn('/Applications/Xcode_26.0.app/Contents/Developer', workflow)
+        self.assertIn('/Applications/Xcode_26.0.1.app/Contents/Developer', workflow)
         self.assertIn('bash Scripts/ci_native.sh simulator-test', workflow)
         self.assertIn('bash Scripts/ci_native.sh device-build', workflow)
         self.assertIn('path: artifacts/evidence/', workflow)

@@ -15,18 +15,23 @@ class CISupportTests(unittest.TestCase):
         spec.loader.exec_module(cls.support)
 
     def test_exact_xcode_pin_and_sdk_floor(self):
-        self.support.validate_versions('Xcode 26.0\nBuild version 17A324', '26.0')
-        self.support.validate_versions('Xcode 26.0\nBuild version 17A324', '26.1')
-        for xcode, sdk in [('Xcode 26.1', '26.1'), ('Xcode 16.4', '26.0'),
-                           ('Xcode 26.0', '18.5'), ('Xcode 26.0', ''),
-                           ('Xcode 26.0 beta', '26.0')]:
+        self.support.validate_versions('Xcode 26.0.1\nBuild version 17A400', '26.0')
+        self.support.validate_versions('Xcode 26.0.1\nBuild version 17A400', '26.1')
+        for xcode, sdk in [('Xcode 26.2', '26.1'), ('Xcode 16.4', '26.0'),
+                           ('Xcode 26.0.1', '18.5'), ('Xcode 26.0.1', ''),
+                           ('Xcode 26.0.1 beta', '26.0')]:
             with self.subTest(xcode=xcode, sdk=sdk), self.assertRaises(ValueError):
                 self.support.validate_versions(xcode, sdk)
 
-    def test_patch_alias_is_rejected_with_actual_version(self):
-        # Real hosted failure: Xcode_26.0.app reported 26.0.1 (17A400).
-        with self.assertRaisesRegex(ValueError, r'required exactly; observed Xcode 26\.0\.1'):
-            self.support.validate_versions('Xcode 26.0.1\nBuild version 17A400', '26.0')
+    def test_release_alias_and_build_mismatch_are_rejected_with_actual_version(self):
+        # Real hosted failure that forced the pin: the 26.0 alias directory
+        # executes Xcode 26.0.1 (17A400). Exact 26.0 (17A324) is no longer hosted.
+        with self.assertRaisesRegex(ValueError, r'required exactly; observed Xcode 26\.0$'):
+            self.support.validate_versions('Xcode 26.0\nBuild version 17A324', '26.0')
+        with self.assertRaisesRegex(ValueError, r'build 17A400 is required exactly'):
+            self.support.validate_versions('Xcode 26.0.1\nBuild version 99Z999', '26.0')
+        with self.assertRaisesRegex(ValueError, r'build 17A400 is required exactly'):
+            self.support.validate_versions('Xcode 26.0.1', '26.0')
 
     def test_selects_available_ios26_phone_by_udid(self):
         payload = {'devices': {

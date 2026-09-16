@@ -12,10 +12,19 @@ import subprocess
 import uuid
 
 
+XCODE_PIN = 'Xcode 26.0.1'
+XCODE_BUILD_PIN = '17A400'
+
+
 def validate_versions(xcode, sdk):
-    if xcode.splitlines()[0:1] != ['Xcode 26.0']:
-        observed = xcode.splitlines()[0] if xcode else '(missing)'
-        raise ValueError('Xcode 26.0 is required exactly; observed ' + observed)
+    lines = xcode.splitlines()
+    if lines[0:1] != [XCODE_PIN]:
+        observed = lines[0] if lines else '(missing)'
+        raise ValueError(XCODE_PIN + ' is required exactly; observed ' + observed)
+    build = re.fullmatch(r'Build version (\S+)', lines[1]) if lines[1:2] else None
+    if build is None or build.group(1) != XCODE_BUILD_PIN:
+        raise ValueError('Xcode build ' + XCODE_BUILD_PIN + ' is required exactly; observed '
+                         + (lines[1] if lines[1:] else '(missing)'))
     if not re.fullmatch(r'\d+\.\d+(?:\.\d+)?', sdk.strip()):
         raise ValueError('Invalid iOS SDK version')
     if int(sdk.split('.')[0]) < 26:
