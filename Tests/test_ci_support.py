@@ -81,6 +81,80 @@ class CISupportTests(unittest.TestCase):
             with self.subTest(payload=payload), self.assertRaises(ValueError):
                 self.support.sanitize_summary(payload)
 
+    def test_full_tree_structure_kept_and_free_text_redacted(self):
+        # Mirrors the modern `xcresulttool get test-results tests` shape.
+        # Free-text and internal reference fields must never survive; the tree
+        # structure, results, and durations must.
+        summary = {'totalTestCount': 2, 'passedTests': 1, 'failedTests': 1,
+                   'skippedTests': 0, 'result': 'Failed'}
+        tree = {'testNodes': [{'id': 'xcobject://private/RowCompanionTests',
+                               'nodeType': 'Suite', 'name': 'RowCompanionUITests',
+                               'result': 'Failed',
+                               'children': [
+                                   {'id': '3~opaque_ref', 'nodeType': 'Unit Test Case',
+                                    'name': 'testRootViewConstructsWithoutExternalDependencies',
+                                    'result': 'Passed', 'duration': 0.5},
+                                   {'nodeType': 'UI Test Case', 'name': 'testLaunchShowsHonestWorkspacePlaceholder',
+                                    'result': 'Failed', 'duration': 13.9,
+                                    'failureText': 'secret private pattern /Users/me/pattern.pdf',
+                                    'attachments': ['/tmp/private.png']}]}]}
+        report = self.support.sanitize_report(tree, summary)
+        self.assertEqual(report['caseCount'], 2)
+        self.assertEqual(report['aggregate'], {'totalTestCount': 2, 'passedTests': 1,
+                                               'failedTests': 1, 'skippedTests': 0, 'result': 'Failed'})
+        suite = report['testNodes'][0]
+        self.assertEqual(suite['nodeType'], 'Suite')
+        self.assertEqual(suite['result'], 'Failed')
+        self.assertEqual(len(suite['children']), 2)
+        self.assertEqual(suite['children'][0]['name'], 'testRootViewConstructsWithoutExternalDependencies')
+        self.assertEqual(suite['children'][0]['duration'], 0.5)
+        failed_case = suite['children'][1]
+        self.assertEqual(failed_case['result'], 'Failed')
+        self.assertTrue(failed_case['failureText']['redacted'])
+        self.assertNotIn('attachments', failed_case)
+        self.assertNotIn('id', suite)
+        self.assertGreaterEqual(report['redactedFields'], 1)
+        self.assertGreaterEqual(report['droppedFields'], 2)
+        rendered = json.dumps(report)
+        for forbidden in ('private', 'secret', 'pattern.pdf', 'opaque_ref', 'xcobject'):
+            self.assertNotIn(forbidden, rendered)
+
+    def test_unsafe_node_names_are_redacted_not_published(self):
+        summary = {'totalTestCount': 1, 'passedTests': 0, 'failedTests': 0,
+                   'skippedTests': 1, 'result': 'Skipped'}
+        tree = [{'nodeType': 'Unit Test Case',
+                 'name': 'user text\nwith newline and emoji 🧶 /Users/nova/secret-scarf.pdf',
+                 'result': 'Skipped', 'duration': 1}]
+        report = self.support.sanitize_report(tree, summary)
+        self.assertEqual(report['caseCount'], 1)
+        node = report['testNodes'][0]
+        self.assertTrue(node['name']['redacted'])
+        self.assertNotIn('secret', json.dumps(report))
+
+    def test_report_fails_closed_on_summary_tree_mismatch(self):
+        summary = {'totalTestCount': 2, 'passedTests': 2, 'failedTests': 0,
+                   'skippedTests': 0, 'result': 'Passed'}
+        one_case = [{'nodeType': 'Unit Test Case', 'name': 'a', 'result': 'Passed', 'duration': 1}]
+        with self.assertRaisesRegex(ValueError, 'disagree'):
+            self.support.sanitize_report(one_case, summary)
+        inconclusive = [{'nodeType': 'Unit Test Case', 'name': 'a', 'result': 'Passed', 'duration': 1},
+                        {'nodeType': 'Unit Test Case', 'name': 'b', 'result': 'Unresolved', 'duration': 1}]
+        with self.assertRaises(ValueError):
+            self.support.sanitize_report(inconclusive, summary)
+
+    def test_report_fails_closed_on_schema_drift(self):
+        summary = {'totalTestCount': 1, 'passedTests': 1, 'failedTests': 0,
+                   'skippedTests': 0, 'result': 'Passed'}
+        for payload in [{}, {'unexpected': []}, 'list?', 42]:
+            with self.subTest(payload=payload), self.assertRaises(ValueError):
+                self.support.sanitize_report(payload, summary)
+        with self.assertRaises(ValueError):
+            self.support.sanitize_report([{'nodeType': 'Unit Test Case', 'name': 'a',
+                                           'result': 'Weird', 'duration': 1}], summary)
+        with self.assertRaises(ValueError):
+            self.support.sanitize_report([{'nodeType': 'Unit Test Case', 'name': 'a',
+                                           'result': 'Passed', 'children': {'not': 'a list'}}], summary)
+
 
 if __name__ == '__main__':
     unittest.main()

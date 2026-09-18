@@ -56,20 +56,23 @@ jobs:
       - name: Unsigned generic iOS build
         if: ${{ !cancelled() && steps.native-tests.outcome != 'skipped' }}
         run: bash Scripts/ci_native.sh device-build
-      - name: Export allowlisted xcresult summary with tested commit
+      - name: Export sanitized xcresult evidence with tested commit
         if: ${{ !cancelled() && steps.native-tests.outcome != 'skipped' }}
         run: |
           python3 Scripts/ci_support.py export-summary \
             --result-bundle artifacts/RowCompanion.xcresult \
             --output artifacts/evidence/xcresult-summary.json
-          shasum -a 256 artifacts/evidence/xcresult-summary.json > artifacts/evidence/SHA256SUMS
-      - name: Retain sanitized summary only (raw bundle is not published)
+          python3 Scripts/ci_support.py export-report \
+            --result-bundle artifacts/RowCompanion.xcresult \
+            --output artifacts/evidence/xcresult-report.json
+          shasum -a 256 artifacts/evidence/*.json > artifacts/evidence/SHA256SUMS
+      - name: Retain sanitized evidence only (raw bundle is not published)
         if: ${{ !cancelled() && steps.native-tests.outcome != 'skipped' }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         env:
           FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
         with:
-          name: xcresult-summary-${{ github.sha }}
+          name: xcresult-evidence-${{ github.sha }}
           path: artifacts/evidence/
           if-no-files-found: error
           retention-days: 14

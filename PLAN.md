@@ -51,7 +51,7 @@ Progress-only JSON contains versioned metadata and counters, not PDF bytes or so
 - PDF integration: valid original fixture, corrupt/locked/oversized documents, viewport clamping and restoration, denied/cancelled picker, disk-full/read failure, no source mutation.
 - UI journeys: create -> import -> complete -> undo -> switch pieces -> relaunch; rotation/resize/size-class changes never alter count, note draft, page, or guide. Check compact phone and iPad, accessibility text sizes and VoiceOver focus. Image-only PDF limitation remains explicit.
 - Backup: round-trip into new IDs; defaults omit original PDFs; malicious path/symlink/hash/version/size fixtures; failure rollback; consistent snapshot under counter updates; deletes do not remove outside paths.
-- CI must run real xcodebuild simulator tests and unsigned generic iOS build with iOS 26+ SDK, retaining xcresult and exact commit/command/version provenance. User data/keys must never enter artifacts.
+- CI must run real xcodebuild simulator tests and unsigned generic iOS build with iOS 26+ SDK, retaining xcresult evidence and exact commit/command/version provenance. Retention is the privacy-reviewed sanitized exports (aggregate plus full sanitized test tree with free text redacted); the raw `.xcresult` bundle is not published. User data/keys must never enter artifacts.
 - Real iPhone/iPad checks (VoiceOver, lock/relaunch, gestures and file providers) require actual device evidence. If unavailable, leave that acceptance open and label the build simulator-only. No screenshot, accessibility audit, TestFlight processing, or dual-screen test may be inferred from docs.
 
 ## Packaging / distribution

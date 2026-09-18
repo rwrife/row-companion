@@ -63,6 +63,9 @@ bash Scripts/ci_native.sh device-build
 python3 Scripts/ci_support.py export-summary \
   --result-bundle artifacts/RowCompanion.xcresult \
   --output artifacts/evidence/xcresult-summary.json
+python3 Scripts/ci_support.py export-report \
+  --result-bundle artifacts/RowCompanion.xcresult \
+  --output artifacts/evidence/xcresult-report.json
 ```
 
 The toolchain check prints Xcode/build and iphoneos SDK versions and rejects any
@@ -95,15 +98,24 @@ failing closed on every other version and on SDK < 26. Any future pin change
 must likewise be an explicit PR with fresh native evidence. No signing
 credentials are needed or accessed by these unsigned checks.
 
-**Evidence limitation / open issue #1 gate:** CI publishes only an allowlisted
-aggregate JSON export from the real xcresult, with tested checkout SHA (the exact
-PR head, not GitHub's synthetic merge ref), Xcode/SDK versions, and SHA-256 checksum. Arbitrary
-test messages, paths, screenshots, attachments, and diagnostics are not uploaded.
-The raw `.xcresult` remains on the ephemeral runner. A reviewed, sanitized **full
-xcresult bundle** retention path is not implemented; therefore the complete
-issue is not claimed closed even if these CI jobs pass. The host tests verify
-helper behavior and structural contracts, not Xcode project compilation, launch,
-physical-device accessibility, or signing. No fabricated native result is used.
+**Evidence retention:** CI publishes two sanitized exports from the real
+xcresult, each with the tested checkout SHA (the exact PR head, not GitHub's
+synthetic merge ref), Xcode/SDK versions, and SHA-256 checksums.
+`xcresult-summary.json` is the allowlisted aggregate. `xcresult-report.json` is
+the **full sanitized test tree** from `xcresulttool get test-results tests`:
+every suite/case node with its result and duration. Privacy rules: node names
+must match a strict identifier pattern or are replaced by length-only redaction
+markers; failure text and any other free-text field are always reduced to
+`{"redacted": true, "length": N}`; internal object ids, attachments, and any
+keys outside the reviewed allowlist are dropped (and counted) rather than
+copied, so a future toolchain schema addition cannot leak strings by default.
+The export fails closed if the tree and aggregate counts disagree or the
+schema drifts. The raw `.xcresult` bundle itself (binary payload, attachments,
+embedded console logs) remains on the ephemeral runner and is not published;
+the sanitized tree is the retained evidence, not a raw-bundle archive. The
+host tests verify helper behavior and structural contracts, not Xcode project
+compilation, launch, physical-device accessibility, or signing. No fabricated
+native result is used.
 
 ## Signing and distribution
 
