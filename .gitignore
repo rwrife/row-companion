@@ -25,4 +25,6 @@ local-data/
 .idea/
 *.tmp
 *.log
+__pycache__/
+*.py[cod]
 # Keep project sources, Package.resolved, fixtures and docs visible.

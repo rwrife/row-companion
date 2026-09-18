@@ -2,13 +2,13 @@
 
 ## Scope and architecture
 
-A single-device, local-first craft workspace for knitting/crochet pattern reference and reversible per-piece progress. Standard iOS app with optional adaptive tablet layout; iPhone Duo is a future dual-screen design target, not an SDK dependency. No application source or test suite exists in this initial scaffold.
+A single-device, local-first craft workspace for knitting/crochet pattern reference and reversible per-piece progress. Standard iOS app with optional adaptive tablet layout; iPhone Duo is a future dual-screen design target, not an SDK dependency. Native bootstrap source and launch tests are present on the implementation branch; executable iOS acceptance remains gated by real pinned-toolchain CI.
 
 ### Technology / pinned platform contract
 
 - Swift 6 language mode, SwiftUI UI, PDFKit viewer, SwiftData local persistence (CloudKit disabled), Foundation Codable/CryptoKit backup validation. Native frameworks minimize dependencies and permission surface.
-- **Xcode 26.0** initial pin; **iOS 26 SDK or newer** mandatory for simulator and device/archive CI. Deployment target iOS 26.0. Commit the Xcode project and shared RowCompanion scheme; use no project generator in MVP.
-- CI selects an explicitly installed Xcode 26.0 on a compatible macOS runner, records full Xcode/SDK versions, fails closed if absent, and enumerates an installed iOS 26 simulator. Pin updates require a PR and new evidence. Linux tests/static checks are never iOS build evidence.
+- **Xcode 26.0.1 (build 17A400)** pin — explicitly updated 2026-09-16 from the initial Xcode 26.0 pin after exact-head hosted CI proved no hosted macOS runner image still installs exact 26.0 (the `Xcode_26.0.app` alias executes 26.0.1); **iOS 26 SDK or newer** mandatory for simulator and device/archive CI. Deployment target iOS 26.0. Commit the Xcode project and shared RowCompanion scheme; use no project generator in MVP.
+- CI selects an explicitly installed Xcode 26.0.1 build 17A400 on a compatible macOS runner, records full Xcode/build/SDK versions, fails closed if absent or different, and enumerates an installed iOS 26 simulator. Pin updates require a PR and new evidence. Linux tests/static checks are never iOS build evidence.
 - Proposed source boundaries: `Domain/` pure row reducer and validation; `Persistence/` transactional repository; `Documents/` bounded PDF copier/view state; `Features/Workspace/` UI; `Backup/` versioned folder format; `Tests/` unit/integration; `UITests/` simulator journeys. Domain stays independent of SwiftUI/PDFKit.
 
 ### Local data and row semantics
@@ -51,7 +51,7 @@ Progress-only JSON contains versioned metadata and counters, not PDF bytes or so
 - PDF integration: valid original fixture, corrupt/locked/oversized documents, viewport clamping and restoration, denied/cancelled picker, disk-full/read failure, no source mutation.
 - UI journeys: create -> import -> complete -> undo -> switch pieces -> relaunch; rotation/resize/size-class changes never alter count, note draft, page, or guide. Check compact phone and iPad, accessibility text sizes and VoiceOver focus. Image-only PDF limitation remains explicit.
 - Backup: round-trip into new IDs; defaults omit original PDFs; malicious path/symlink/hash/version/size fixtures; failure rollback; consistent snapshot under counter updates; deletes do not remove outside paths.
-- CI must run real xcodebuild simulator tests and unsigned generic iOS build with iOS 26+ SDK, retaining xcresult and exact commit/command/version provenance. User data/keys must never enter artifacts.
+- CI must run real xcodebuild simulator tests and unsigned generic iOS build with iOS 26+ SDK, retaining xcresult evidence and exact commit/command/version provenance. Retention is the privacy-reviewed sanitized exports (aggregate plus full sanitized test tree with free text redacted); the raw `.xcresult` bundle is not published. User data/keys must never enter artifacts.
 - Real iPhone/iPad checks (VoiceOver, lock/relaunch, gestures and file providers) require actual device evidence. If unavailable, leave that acceptance open and label the build simulator-only. No screenshot, accessibility audit, TestFlight processing, or dual-screen test may be inferred from docs.
 
 ## Packaging / distribution

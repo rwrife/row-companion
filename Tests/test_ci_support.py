@@ -1,0 +1,203 @@
+import importlib.util
+import json
+from pathlib import Path
+import unittest
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+class CISupportTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        spec = importlib.util.spec_from_file_location('ci_support', ROOT / 'Scripts/ci_support.py')
+        assert spec is not None and spec.loader is not None
+        cls.support = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cls.support)
+
+    def test_exact_xcode_pin_and_sdk_floor(self):
+        self.support.validate_versions('Xcode 26.0.1\nBuild version 17A400', '26.0')
+        self.support.validate_versions('Xcode 26.0.1\nBuild version 17A400', '26.1')
+        for xcode, sdk in [('Xcode 26.2', '26.1'), ('Xcode 16.4', '26.0'),
+                           ('Xcode 26.0.1', '18.5'), ('Xcode 26.0.1', ''),
+                           ('Xcode 26.0.1 beta', '26.0')]:
+            with self.subTest(xcode=xcode, sdk=sdk), self.assertRaises(ValueError):
+                self.support.validate_versions(xcode, sdk)
+
+    def test_release_alias_and_build_mismatch_are_rejected_with_actual_version(self):
+        # Real hosted failure that forced the pin: the 26.0 alias directory
+        # executes Xcode 26.0.1 (17A400). Exact 26.0 (17A324) is no longer hosted.
+        with self.assertRaisesRegex(ValueError, r'required exactly; observed Xcode 26\.0$'):
+            self.support.validate_versions('Xcode 26.0\nBuild version 17A324', '26.0')
+        with self.assertRaisesRegex(ValueError, r'build 17A400 is required exactly'):
+            self.support.validate_versions('Xcode 26.0.1\nBuild version 99Z999', '26.0')
+        with self.assertRaisesRegex(ValueError, r'build 17A400 is required exactly'):
+            self.support.validate_versions('Xcode 26.0.1', '26.0')
+
+    def test_selects_available_ios26_phone_by_udid(self):
+        payload = {'devices': {
+            'com.apple.CoreSimulator.SimRuntime.iOS-18-5': [
+                {'name': 'iPhone old', 'udid': '00000000-0000-0000-0000-000000000001', 'isAvailable': True}],
+            'com.apple.CoreSimulator.SimRuntime.iOS-26-0': [
+                {'name': 'iPad Pro', 'udid': '00000000-0000-0000-0000-000000000002', 'isAvailable': True},
+                {'name': 'iPhone 17', 'udid': '00000000-0000-0000-0000-000000000003', 'isAvailable': False},
+                {'name': 'iPhone 17 Pro', 'udid': '00000000-0000-0000-0000-000000000004', 'isAvailable': True}]}}
+        self.assertEqual(self.support.select_simulator(payload), '00000000-0000-0000-0000-000000000004')
+
+    def test_selector_fails_closed_without_ios26(self):
+        for payload in [{}, {'devices': {}}, {'devices': {
+            'com.apple.CoreSimulator.SimRuntime.iOS-26-0': [
+                {'name': 'iPhone', 'udid': 'unsafe; shell', 'isAvailable': True}]}}]:
+            with self.subTest(payload=payload), self.assertRaises(ValueError):
+                self.support.select_simulator(payload)
+
+    def test_summary_is_allowlisted_not_arbitrary_test_strings(self):
+        summary = {'title': '/Users/private/pattern.pdf', 'totalTestCount': 2,
+                   'passedTests': 2, 'failedTests': 0, 'skippedTests': 0,
+                   'testFailures': [{'message': 'secret private pattern'}],
+                   'result': 'Passed', 'finishTime': 123.0}
+        clean = self.support.sanitize_summary(summary)
+        self.assertEqual(clean, {'totalTestCount': 2, 'passedTests': 2,
+                                'failedTests': 0, 'skippedTests': 0, 'result': 'Passed'})
+        self.assertNotIn('private', json.dumps(clean))
+
+    def test_summary_rejects_contradictory_results(self):
+        for result, passed, failed, skipped in [('Failed', 2, 0, 0),
+                                               ('Skipped', 1, 0, 1),
+                                               ('Skipped', 0, 1, 1)]:
+            with self.subTest(result=result), self.assertRaises(ValueError):
+                self.support.sanitize_summary({'totalTestCount': 2, 'passedTests': passed,
+                                               'failedTests': failed, 'skippedTests': skipped,
+                                               'result': result})
+        for result, passed, failed, skipped in [('Passed', 2, 0, 0),
+                                               ('Failed', 1, 1, 0),
+                                               ('Skipped', 0, 0, 2)]:
+            value = {'totalTestCount': 2, 'passedTests': passed, 'failedTests': failed,
+                     'skippedTests': skipped, 'result': result}
+            self.assertEqual(self.support.sanitize_summary(value), value)
+
+    def test_summary_requires_real_counts(self):
+        for payload in [{}, {'totalTestCount': True}, {'totalTestCount': -1},
+                        {'totalTestCount': 0, 'passedTests': 0, 'failedTests': 0, 'skippedTests': 0, 'result': 'Passed'}]:
+            with self.subTest(payload=payload), self.assertRaises(ValueError):
+                self.support.sanitize_summary(payload)
+
+    def test_full_tree_structure_kept_and_free_text_redacted(self):
+        # Mirrors the modern `xcresulttool get test-results tests` shape.
+        # Free-text and internal reference fields must never survive; the tree
+        # structure, results, and durations must.
+        summary = {'totalTestCount': 2, 'passedTests': 1, 'failedTests': 1,
+                   'skippedTests': 0, 'result': 'Failed'}
+        tree = {'testNodes': [{'id': 'xcobject://private/RowCompanionTests',
+                               'nodeType': 'Suite', 'name': 'RowCompanionUITests',
+                               'result': 'Failed',
+                               'children': [
+                                   {'id': '3~opaque_ref', 'nodeType': 'Unit Test Case',
+                                    'name': 'testRootViewConstructsWithoutExternalDependencies',
+                                    'result': 'Passed', 'duration': 0.5},
+                                   {'nodeType': 'UI Test Case', 'name': 'testLaunchShowsHonestWorkspacePlaceholder',
+                                    'result': 'Failed', 'duration': 13.9,
+                                    'failureText': 'secret private pattern /Users/me/pattern.pdf',
+                                    'attachments': ['/tmp/private.png']}]}]}
+        report = self.support.sanitize_report(tree, summary)
+        self.assertEqual(report['caseCount'], 2)
+        self.assertEqual(report['aggregate'], {'totalTestCount': 2, 'passedTests': 1,
+                                               'failedTests': 1, 'skippedTests': 0, 'result': 'Failed'})
+        suite = report['testNodes'][0]
+        self.assertEqual(suite['nodeType'], 'Suite')
+        self.assertEqual(suite['result'], 'Failed')
+        self.assertEqual(len(suite['children']), 2)
+        self.assertEqual(suite['children'][0]['name'], 'testRootViewConstructsWithoutExternalDependencies')
+        self.assertEqual(suite['children'][0]['duration'], 0.5)
+        failed_case = suite['children'][1]
+        self.assertEqual(failed_case['result'], 'Failed')
+        self.assertTrue(failed_case['failureText']['redacted'])
+        self.assertNotIn('attachments', failed_case)
+        self.assertNotIn('id', suite)
+        self.assertGreaterEqual(report['redactedFields'], 1)
+        self.assertGreaterEqual(report['droppedFields'], 2)
+        rendered = json.dumps(report)
+        for forbidden in ('private', 'secret', 'pattern.pdf', 'opaque_ref', 'xcobject'):
+            self.assertNotIn(forbidden, rendered)
+
+    def test_unsafe_node_names_are_redacted_not_published(self):
+        summary = {'totalTestCount': 1, 'passedTests': 0, 'failedTests': 0,
+                   'skippedTests': 1, 'result': 'Skipped'}
+        tree = [{'nodeType': 'Unit Test Case',
+                 'name': 'user text\nwith newline and emoji 🧶 /Users/nova/secret-scarf.pdf',
+                 'result': 'Skipped', 'duration': 1}]
+        report = self.support.sanitize_report(tree, summary)
+        self.assertEqual(report['caseCount'], 1)
+        node = report['testNodes'][0]
+        self.assertTrue(node['name']['redacted'])
+        self.assertNotIn('secret', json.dumps(report))
+
+    def test_real_hosted_shape_labels_are_accepted_or_redacted(self):
+        # Real hosted jobs 105491046148, 105492551762, 105494245523 on the
+        # pinned toolchain produced, in order: a 'Test Plan' root,
+        # 'Unit test bundle' wrappers, and plain 'Test Case' leaves. Path-like
+        # names are redacted; unknown labels publish only length markers.
+        summary = {'totalTestCount': 2, 'passedTests': 2, 'failedTests': 0,
+                   'skippedTests': 0, 'result': 'Passed'}
+        tree = {'testNodes': [{'nodeType': 'Test Plan', 'name': '/Users/runner/work/row-companion/RowCompanion.xctestplan',
+                               'result': 'Passed',
+                               'children': [{'nodeType': 'Unit test bundle', 'name': 'RowCompanionTests.xctest',
+                                             'result': 'Passed',
+                                             'children': [{'nodeType': 'Suite', 'name': 'RowCompanionTests', 'result': 'Passed',
+                                                           'children': [{'nodeType': 'Test Case', 'name': 'testRootViewConstructsWithoutExternalDependencies',
+                                                                         'result': 'Passed', 'duration': 0.4}]}]},
+                                            {'nodeType': 'UI test bundle', 'name': 'RowCompanionUITests.xctest',
+                                             'result': 'Passed',
+                                             'children': [{'nodeType': 'Suite', 'name': 'RowCompanionUITests', 'result': 'Passed',
+                                                           'children': [{'nodeType': 'Test Case', 'name': 'testLaunchShowsHonestWorkspacePlaceholder',
+                                                                         'result': 'Passed', 'duration': 13.9}]}]}]}]}
+        report = self.support.sanitize_report(tree, summary)
+        self.assertEqual(report['caseCount'], 2)
+        plan = report['testNodes'][0]
+        self.assertEqual(plan['nodeType'], 'Test Plan')
+        self.assertTrue(plan['name']['redacted'])
+        self.assertNotIn('runner', json.dumps(report))
+        leaf = plan['children'][0]['children'][0]['children'][0]
+        self.assertEqual(leaf['nodeType'], 'Test Case')
+        self.assertEqual(leaf['name'], 'testRootViewConstructsWithoutExternalDependencies')
+        # Any unknown label (container or case) publishes only a redaction
+        # marker, never the raw string, and the case tally still holds.
+        exotic = [{'nodeType': 'Exotic Node with private text', 'name': 'ok',
+                   'result': 'Passed', 'children': [
+                       {'nodeType': 'Weird Leaf', 'name': 'a', 'result': 'Passed', 'duration': 1}]}]
+        rep = self.support.sanitize_report(exotic, {
+            'totalTestCount': 1, 'passedTests': 1, 'failedTests': 0,
+            'skippedTests': 0, 'result': 'Passed'})
+        self.assertTrue(rep['testNodes'][0]['nodeType']['redacted'])
+        self.assertTrue(rep['testNodes'][0]['children'][0]['nodeType']['redacted'])
+        self.assertNotIn('Exotic', json.dumps(rep))
+        self.assertNotIn('Weird', json.dumps(rep))
+        # A node type that is not an enum word (long free-text-like label)
+        # cannot smuggle content: SAFE_NAME never matches, so it redacts.
+
+    def test_report_fails_closed_on_summary_tree_mismatch(self):
+        summary = {'totalTestCount': 2, 'passedTests': 2, 'failedTests': 0,
+                   'skippedTests': 0, 'result': 'Passed'}
+        one_case = [{'nodeType': 'Unit Test Case', 'name': 'a', 'result': 'Passed', 'duration': 1}]
+        with self.assertRaisesRegex(ValueError, 'disagree'):
+            self.support.sanitize_report(one_case, summary)
+        inconclusive = [{'nodeType': 'Unit Test Case', 'name': 'a', 'result': 'Passed', 'duration': 1},
+                        {'nodeType': 'Unit Test Case', 'name': 'b', 'result': 'Unresolved', 'duration': 1}]
+        with self.assertRaises(ValueError):
+            self.support.sanitize_report(inconclusive, summary)
+
+    def test_report_fails_closed_on_schema_drift(self):
+        summary = {'totalTestCount': 1, 'passedTests': 1, 'failedTests': 0,
+                   'skippedTests': 0, 'result': 'Passed'}
+        for payload in [{}, {'unexpected': []}, 'list?', 42]:
+            with self.subTest(payload=payload), self.assertRaises(ValueError):
+                self.support.sanitize_report(payload, summary)
+        with self.assertRaises(ValueError):
+            self.support.sanitize_report([{'nodeType': 'Unit Test Case', 'name': 'a',
+                                           'result': 'Weird', 'duration': 1}], summary)
+        with self.assertRaises(ValueError):
+            self.support.sanitize_report([{'nodeType': 'Unit Test Case', 'name': 'a',
+                                           'result': 'Passed', 'children': {'not': 'a list'}}], summary)
+
+
+if __name__ == '__main__':
+    unittest.main()

@@ -4,7 +4,7 @@ Local-first iPhone workspace for knitters and crocheters to keep pattern PDFs be
 
 ## Status
 
-**Documentation/backlog scaffold only.** No Xcode project, running app, build/test result, TestFlight binary, or dual-screen device compatibility is claimed yet. See [PLAN.md](PLAN.md) and the [seven implementation issues](https://github.com/rwrife/row-companion/issues).
+**iOS bootstrap source and CI wiring.** The repository contains the native Xcode project, shared scheme, SwiftUI launch placeholder, unit test, and XCUITest launch smoke. Pattern import, persistence, and counters are not implemented yet. Native acceptance requires the exact-head macOS CI result; Linux helper tests are not iOS build evidence. See [PLAN.md](PLAN.md) and [issue #1](https://github.com/rwrife/row-companion/issues/1).
 
 ## Why / who
 
@@ -23,7 +23,7 @@ Examples: repeat an eight-row scarf motif without mental modulo arithmetic; resu
 
 ## Platforms and two-pane design
 
-- Required primary platform: **iOS**, built with the **iOS 26 SDK or newer**. Initial toolchain pin: **Xcode 26.0**, Swift 6 language mode; deployment target iOS 26.0. CI must check `xcodebuild -version` and `xcrun --sdk iphoneos --show-sdk-version` and fail below SDK 26. Updates to the pin must be explicit and revalidated.
+- Required primary platform: **iOS**, built with the **iOS 26 SDK or newer**. Toolchain pin: **Xcode 26.0.1 (build 17A400)** — an explicit update from the initial Xcode 26.0 pin after hosted evidence showed exact 26.0 is no longer installed on hosted macOS runners — Swift 6 language mode; deployment target iOS 26.0. CI must check `xcodebuild -version` and `xcrun --sdk iphoneos --show-sdk-version` and fail below SDK 26. Updates to the pin must be explicit and revalidated.
 - SwiftUI standard iPhone app; **optional iPad/regular-width adaptive tablet view**. Android and desktop are outside MVP.
 - **iPhone Duo dual-screen design target**, not a claim of available hardware or native SDK compatibility: one display would keep the chart visible while the other holds the piece selector, repeat status, notes, and large controls. On current compact layouts, the PDF and controls share a screen with an expandable notes section; regular-width layouts show reference and controls side by side.
 - One `WorkspaceLayout` boundary chooses arrangement from available width and accessibility needs. Durable project/piece state is independent of view identity. Later native dual-screen APIs may feed safe regions into that boundary; no hinge sensor, fold detection, external display, or unavailable SDK API is required now. Rotation/resize must not create a row event or reset a viewport.
@@ -45,20 +45,81 @@ Not MVP: automatic stitch recognition, pattern generation, OCR, audio/voice cont
 
 ## Development quickstart
 
-Today: clone this repository and read PLAN.md; implementation starts with issue #1. There is no build command for the scaffold itself.
-
-After #1 lands on a Mac with Xcode 26.0, the required repeatable commands will be:
+Host-capable verification (Python 3 standard library; no app dependencies):
 
 ```sh
-xcodebuild -version
-xcrun --sdk iphoneos --show-sdk-version
-xcodebuild -list -project RowCompanion.xcodeproj
-# Choose an installed iOS 26 simulator UDID from xcrun simctl list devices available:
-xcodebuild -project RowCompanion.xcodeproj -scheme RowCompanion \
-  -destination 'platform=iOS Simulator,id=<SIMULATOR_UDID>' test
+python3 -m unittest discover -s Tests -v
+bash -n Scripts/ci_native.sh
 ```
 
-These are the planned project/scheme names, not existing artifacts. Linux cannot run Xcode; executors must obtain real macOS CI output, never substitute source inspection for iOS build evidence.
+On a Mac with **Xcode 26.0.1 (build 17A400)** installed:
+
+```sh
+export DEVELOPER_DIR=/Applications/Xcode_26.0.1.app/Contents/Developer
+python3 Scripts/ci_support.py check-toolchain
+xcodebuild -list -project RowCompanion.xcodeproj
+bash Scripts/ci_native.sh simulator-test
+bash Scripts/ci_native.sh device-build
+python3 Scripts/ci_support.py export-summary \
+  --result-bundle artifacts/RowCompanion.xcresult \
+  --output artifacts/evidence/xcresult-summary.json
+python3 Scripts/ci_support.py export-report \
+  --result-bundle artifacts/RowCompanion.xcresult \
+  --output artifacts/evidence/xcresult-report.json
+```
+
+The toolchain check prints Xcode/build and iphoneos SDK versions and rejects any
+Xcode other than exactly 26.0.1 build 17A400, or any SDK below 26. The test wrapper
+deterministically selects
+an installed, available iOS 26 iPhone simulator by UDID (no hardcoded device name),
+runs both the unit test and UI launch smoke, and disables signing. The generic
+iOS build is also unsigned; it is not installable release/TestFlight evidence.
+For a repeat local test run, set `RESULT_BUNDLE` to a new `.xcresult` path so
+Xcode never overwrites previous evidence. Use that same path when exporting.
+
+CI runs the same commands on `macos-15`, fails closed if the pinned Xcode is no
+longer installed, and never substitutes a newer Xcode silently. The committed
+`.xcodeproj` is source configuration, not a generated build artifact.
+
+**Pin update history (2026-09-14 → 2026-09-16):** the initial pin required exact
+`Xcode 26.0`, and hosted [run 34855094155](https://github.com/rwrife/row-companion/actions/runs/34855094155)
+reported `Xcode 26.0.1`, build `17A400`, SDK `26.0` at the `Xcode_26.0.app`
+path. The directory name is not proof of the installed version, so the strict
+gate correctly failed and simulator tests and the unsigned build did not run.
+An exact-head rerun on 2026-09-16
+([attempt 3](https://github.com/rwrife/row-companion/actions/runs/34867523105/attempts/3))
+enumerated every installed Xcode (16.0–16.4, 26.0.1, 26.1.1, 26.2, 26.3) and
+confirmed no exact 26.0 (17A324) remains hosted anywhere on the runner image;
+the image manifest only ships `Xcode_26.0.1.app` aliased as `Xcode_26.0.app`,
+and there are no self-hosted runners. Rather than relax to a prefix match or
+silently substitute a newer toolchain, this PR makes the explicit pin update
+PLAN.md requires: exact `Xcode 26.0.1` **plus exact build `17A400`**, still
+failing closed on every other version and on SDK < 26. Any future pin change
+must likewise be an explicit PR with fresh native evidence. No signing
+credentials are needed or accessed by these unsigned checks.
+
+**Evidence retention:** CI publishes two sanitized exports from the real
+xcresult, each with the tested checkout SHA (the exact PR head, not GitHub's
+synthetic merge ref), Xcode/SDK versions, and SHA-256 checksums.
+`xcresult-summary.json` is the allowlisted aggregate. `xcresult-report.json` is
+the **full sanitized test tree** from `xcresulttool get test-results tests`:
+every suite/case node with its result and duration. The hosted toolchain's
+type labels drifted across real runs (`Test Plan`, `Unit test bundle`, plain
+`Test Case` leaves), so the sanitizer is shape-driven: containers are nodes
+with children, cases are leaves. Privacy rules: type labels outside the
+observed set and node names that do not match a strict identifier pattern are
+replaced by length-only redaction markers; failure text and any other
+free-text field are always reduced to
+`{"redacted": true, "length": N}`; internal object ids, attachments, and any
+keys outside the reviewed allowlist are dropped (and counted) rather than
+copied, so a future toolchain schema addition cannot leak strings by default.
+The export fails closed if the tree and aggregate counts disagree or the
+schema drifts. The raw `.xcresult` bundle itself (binary payload, attachments,
+embedded console logs) remains on the ephemeral runner and is not published;
+the sanitized tree is the retained evidence, not a raw-bundle archive. The
+host tests verify helper behavior and structural contracts, not Xcode project
+compilation, launch, physical-device accessibility, or signing. No fabricated
+native result is used.
 
 ## Signing and distribution
 
