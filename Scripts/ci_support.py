@@ -24,13 +24,18 @@ XCODE_PIN = 'Xcode 26.0.1'
 XCODE_BUILD_PIN = '17A400'
 
 SAFE_NAME = re.compile(r'[A-Za-z0-9_.\-]{1,128}')
-# Observed on the pinned toolchain (hosted job 105491046148): the tree roots
-# at a 'Test Plan' node wrapping 'Suite' nodes. Swift-testing produces
-# 'Function Test Case' leaves. Unknown types still fail closed.
-CONTAINER_NODE_TYPES = ('Test Plan', 'Suite')
+# Real hosted evidence (jobs 105491046148, 105492551762 on the pinned
+# toolchain): the tree roots at 'Test Plan' and wraps suites in bundles named
+# 'Unit test bundle'/'UI test bundle' (fastlane trainer documents the same
+# container spellings). The container chain drifted across two runs, so any
+# node that carries a children list is treated as a structural container:
+# its name is pattern-checked (paths redact) and unknown type labels are
+# recorded. Leaf test cases are NOT trusted by shape: their nodeType must be
+# on the strict case allowlist below, and unknown leaf types fail closed.
 CASE_NODE_TYPES = ('Unit Test Case', 'UI Test Case', 'Function Test Case',
                    'Container Test Case', 'Automation Test Case')
-ALLOWED_NODE_TYPES = CONTAINER_NODE_TYPES + CASE_NODE_TYPES
+KNOWN_CONTAINER_TYPES = ('Test Plan', 'Suite', 'Test Suite',
+                         'Unit test bundle', 'UI test bundle')
 ALLOWED_RESULTS = ('Passed', 'Failed', 'Skipped')
 REDACT_KEYS = ('failureText', 'description', 'comments')
 
@@ -101,12 +106,27 @@ def _walk_node(node, stats):
     if not isinstance(node, dict):
         raise ValueError('xcresult test node must be an object')
     node_type = node.get('nodeType')
-    if node_type not in ALLOWED_NODE_TYPES:
-        raise ValueError('Unexpected xcresult node type: ' + repr(node_type))
+    children = node.get('children')
+    clean: dict = {}
+    if isinstance(children, list):
+        # Structural container (Test Plan / bundle / suite nesting has
+        # drifted across toolchain builds). Type labels outside the known
+        # set are recorded as redaction markers; children are still walked.
+        if node_type in KNOWN_CONTAINER_TYPES:
+            clean['nodeType'] = node_type
+        else:
+            clean['nodeType'] = _redact(node_type)
+            stats['redacted'] += 1
+    elif isinstance(children, dict) or children is not None:
+        raise ValueError('xcresult node children must be a list')
+    else:
+        if node_type not in CASE_NODE_TYPES:
+            raise ValueError('Unexpected xcresult leaf node type: ' + repr(node_type))
+        clean['nodeType'] = node_type
     result = node.get('result')
     if result not in ALLOWED_RESULTS:
         raise ValueError('Unexpected xcresult node result: ' + repr(result))
-    clean = {'nodeType': node_type, 'result': result}
+    clean['result'] = result
     name = node.get('name')
     if isinstance(name, str) and SAFE_NAME.fullmatch(name):
         clean['name'] = name
@@ -126,23 +146,20 @@ def _walk_node(node, stats):
     for key in node:
         if key not in known:
             stats['dropped'] += 1
-    if 'children' in node:
-        children = node['children']
-        if not isinstance(children, list):
-            raise ValueError('xcresult node children must be a list')
+    if isinstance(children, list):
         clean['children'] = [_walk_node(child, stats) for child in children]
     return clean
 
 
 def _count_cases(node, tallies):
-    if node['nodeType'] in CASE_NODE_TYPES:
-        if 'children' in node:
+    if 'children' in node:
+        if node['nodeType'] in CASE_NODE_TYPES:
             raise ValueError('xcresult test case must not have children')
-        tallies[node['result']] += 1
-        return 1
-    if 'children' not in node:
-        raise ValueError('xcresult container node must have children')
-    return sum(_count_cases(child, tallies) for child in node['children'])
+        return sum(_count_cases(child, tallies) for child in node['children'])
+    if node['nodeType'] not in CASE_NODE_TYPES:
+        raise ValueError('Non-case node without children')
+    tallies[node['result']] += 1
+    return 1
 
 
 def sanitize_report(payload, summary):

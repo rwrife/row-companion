@@ -131,29 +131,45 @@ class CISupportTests(unittest.TestCase):
         self.assertTrue(node['name']['redacted'])
         self.assertNotIn('secret', json.dumps(report))
 
-    def test_real_hosted_shape_test_plan_root_is_accepted(self):
-        # Hosted job 105491046148 on the pinned toolchain produced a 'Test Plan'
-        # root node. The first implementation failed closed on it; the real
-        # shape must now pass while unknown types still reject.
+    def test_real_hosted_shape_test_plan_and_bundles_are_accepted(self):
+        # Hosted jobs 105491046148 and 105492551762 on the pinned toolchain:
+        # the tree roots at a 'Test Plan' node and wraps suites in
+        # 'Unit test bundle' nodes. Both container spellings must pass while
+        # the path-like Test Plan name is redacted and unknown LEAF types
+        # still reject.
         summary = {'totalTestCount': 2, 'passedTests': 2, 'failedTests': 0,
                    'skippedTests': 0, 'result': 'Passed'}
         tree = {'testNodes': [{'nodeType': 'Test Plan', 'name': '/Users/runner/work/row-companion/RowCompanion.xctestplan',
                                'result': 'Passed',
-                               'children': [{'nodeType': 'Suite', 'name': 'RowCompanionTests', 'result': 'Passed',
-                                             'children': [{'nodeType': 'Unit Test Case', 'name': 'testRootViewConstructsWithoutExternalDependencies',
-                                                           'result': 'Passed', 'duration': 0.4}]},
-                                            {'nodeType': 'Suite', 'name': 'RowCompanionUITests', 'result': 'Passed',
-                                             'children': [{'nodeType': 'UI Test Case', 'name': 'testLaunchShowsHonestWorkspacePlaceholder',
-                                                           'result': 'Passed', 'duration': 13.9}]}]}]}
+                               'children': [{'nodeType': 'Unit test bundle', 'name': 'RowCompanionTests.xctest',
+                                             'result': 'Passed',
+                                             'children': [{'nodeType': 'Suite', 'name': 'RowCompanionTests', 'result': 'Passed',
+                                                           'children': [{'nodeType': 'Unit Test Case', 'name': 'testRootViewConstructsWithoutExternalDependencies',
+                                                                         'result': 'Passed', 'duration': 0.4}]}]},
+                                            {'nodeType': 'UI test bundle', 'name': 'RowCompanionUITests.xctest',
+                                             'result': 'Passed',
+                                             'children': [{'nodeType': 'Suite', 'name': 'RowCompanionUITests', 'result': 'Passed',
+                                                           'children': [{'nodeType': 'UI Test Case', 'name': 'testLaunchShowsHonestWorkspacePlaceholder',
+                                                                         'result': 'Passed', 'duration': 13.9}]}]}]}]}
         report = self.support.sanitize_report(tree, summary)
         self.assertEqual(report['caseCount'], 2)
         plan = report['testNodes'][0]
         self.assertEqual(plan['nodeType'], 'Test Plan')
         self.assertTrue(plan['name']['redacted'])
         self.assertNotIn('runner', json.dumps(report))
+        # Unknown structural containers are kept as redacted-label containers.
+        unknown_container = [{'nodeType': 'Exotic Container', 'name': 'ok',
+                              'result': 'Passed', 'children': [
+                                  {'nodeType': 'Unit Test Case', 'name': 'a', 'result': 'Passed', 'duration': 1}]}]
+        rep = self.support.sanitize_report(unknown_container, {
+            'totalTestCount': 1, 'passedTests': 1, 'failedTests': 0,
+            'skippedTests': 0, 'result': 'Passed'})
+        self.assertTrue(rep['testNodes'][0]['nodeType']['redacted'])
+        self.assertNotIn('Exotic', json.dumps(rep))
+        # Unknown leaf (case) types fail closed.
         with self.assertRaises(ValueError):
-            self.support.sanitize_report([{'nodeType': 'Quantum Suite', 'name': 'x',
-                                           'result': 'Passed', 'children': []}], summary)
+            self.support.sanitize_report([{'nodeType': 'Quantum Test Case', 'name': 'x',
+                                           'result': 'Passed', 'duration': 1}], summary)
 
     def test_report_fails_closed_on_summary_tree_mismatch(self):
         summary = {'totalTestCount': 2, 'passedTests': 2, 'failedTests': 0,
