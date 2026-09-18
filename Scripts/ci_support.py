@@ -24,7 +24,13 @@ XCODE_PIN = 'Xcode 26.0.1'
 XCODE_BUILD_PIN = '17A400'
 
 SAFE_NAME = re.compile(r'[A-Za-z0-9_.\-]{1,128}')
-ALLOWED_NODE_TYPES = ('Suite', 'Unit Test Case', 'UI Test Case')
+# Observed on the pinned toolchain (hosted job 105491046148): the tree roots
+# at a 'Test Plan' node wrapping 'Suite' nodes. Swift-testing produces
+# 'Function Test Case' leaves. Unknown types still fail closed.
+CONTAINER_NODE_TYPES = ('Test Plan', 'Suite')
+CASE_NODE_TYPES = ('Unit Test Case', 'UI Test Case', 'Function Test Case',
+                   'Container Test Case', 'Automation Test Case')
+ALLOWED_NODE_TYPES = CONTAINER_NODE_TYPES + CASE_NODE_TYPES
 ALLOWED_RESULTS = ('Passed', 'Failed', 'Skipped')
 REDACT_KEYS = ('failureText', 'description', 'comments')
 
@@ -129,13 +135,13 @@ def _walk_node(node, stats):
 
 
 def _count_cases(node, tallies):
-    if node['nodeType'].endswith('Test Case'):
+    if node['nodeType'] in CASE_NODE_TYPES:
         if 'children' in node:
             raise ValueError('xcresult test case must not have children')
         tallies[node['result']] += 1
         return 1
     if 'children' not in node:
-        raise ValueError('xcresult suite must have children')
+        raise ValueError('xcresult container node must have children')
     return sum(_count_cases(child, tallies) for child in node['children'])
 
 
