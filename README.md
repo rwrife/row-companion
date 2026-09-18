@@ -103,9 +103,13 @@ xcresult, each with the tested checkout SHA (the exact PR head, not GitHub's
 synthetic merge ref), Xcode/SDK versions, and SHA-256 checksums.
 `xcresult-summary.json` is the allowlisted aggregate. `xcresult-report.json` is
 the **full sanitized test tree** from `xcresulttool get test-results tests`:
-every suite/case node with its result and duration. Privacy rules: node names
-must match a strict identifier pattern or are replaced by length-only redaction
-markers; failure text and any other free-text field are always reduced to
+every suite/case node with its result and duration. The hosted toolchain's
+type labels drifted across real runs (`Test Plan`, `Unit test bundle`, plain
+`Test Case` leaves), so the sanitizer is shape-driven: containers are nodes
+with children, cases are leaves. Privacy rules: type labels outside the
+observed set and node names that do not match a strict identifier pattern are
+replaced by length-only redaction markers; failure text and any other
+free-text field are always reduced to
 `{"redacted": true, "length": N}`; internal object ids, attachments, and any
 keys outside the reviewed allowlist are dropped (and counted) rather than
 copied, so a future toolchain schema addition cannot leak strings by default.

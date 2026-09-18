@@ -24,18 +24,24 @@ XCODE_PIN = 'Xcode 26.0.1'
 XCODE_BUILD_PIN = '17A400'
 
 SAFE_NAME = re.compile(r'[A-Za-z0-9_.\-]{1,128}')
-# Real hosted evidence (jobs 105491046148, 105492551762 on the pinned
-# toolchain): the tree roots at 'Test Plan' and wraps suites in bundles named
-# 'Unit test bundle'/'UI test bundle' (fastlane trainer documents the same
-# container spellings). The container chain drifted across two runs, so any
-# node that carries a children list is treated as a structural container:
-# its name is pattern-checked (paths redact) and unknown type labels are
-# recorded. Leaf test cases are NOT trusted by shape: their nodeType must be
-# on the strict case allowlist below, and unknown leaf types fail closed.
-CASE_NODE_TYPES = ('Unit Test Case', 'UI Test Case', 'Function Test Case',
-                   'Container Test Case', 'Automation Test Case')
+# Real hosted evidence on the pinned toolchain (jobs 105491046148,
+# 105492551762, 105494245523): the tests tree uses a drifting label set —
+# 'Test Plan' root, 'Unit test bundle'/'UI test bundle' wrappers, plain
+# 'Test Case' leaves (not the documented 'Unit Test Case'). Labels are enum
+# words, not free text, but they are not stable, so the sanitizer is
+# shape-driven: containers are nodes with a children list, cases are
+# leaves. Known labels pass through; ANY unknown label (container or case)
+# is published only as a length-only redaction marker. Names are always
+# pattern-checked, free text is always redacted, unknown keys are dropped,
+# and the export still aborts unless the leaf tallies exactly match the
+# independently exported aggregate summary. An unrecognized schema can
+# therefore neither leak strings nor produce self-consistent-looking
+# evidence that disagrees with the aggregate.
 KNOWN_CONTAINER_TYPES = ('Test Plan', 'Suite', 'Test Suite',
                          'Unit test bundle', 'UI test bundle')
+KNOWN_CASE_TYPES = ('Test Case', 'Unit Test Case', 'UI Test Case',
+                    'Function Test Case', 'Container Test Case',
+                    'Automation Test Case')
 ALLOWED_RESULTS = ('Passed', 'Failed', 'Skipped')
 REDACT_KEYS = ('failureText', 'description', 'comments')
 
@@ -108,21 +114,17 @@ def _walk_node(node, stats):
     node_type = node.get('nodeType')
     children = node.get('children')
     clean: dict = {}
-    if isinstance(children, list):
-        # Structural container (Test Plan / bundle / suite nesting has
-        # drifted across toolchain builds). Type labels outside the known
-        # set are recorded as redaction markers; children are still walked.
-        if node_type in KNOWN_CONTAINER_TYPES:
-            clean['nodeType'] = node_type
-        else:
-            clean['nodeType'] = _redact(node_type)
-            stats['redacted'] += 1
-    elif isinstance(children, dict) or children is not None:
+    if isinstance(children, dict) or children is not None and not isinstance(children, list):
         raise ValueError('xcresult node children must be a list')
+    if isinstance(children, list):
+        known = KNOWN_CONTAINER_TYPES
     else:
-        if node_type not in CASE_NODE_TYPES:
-            raise ValueError('Unexpected xcresult leaf node type: ' + repr(node_type))
+        known = KNOWN_CASE_TYPES
+    if node_type in known:
         clean['nodeType'] = node_type
+    else:
+        clean['nodeType'] = _redact(node_type)
+        stats['redacted'] += 1
     result = node.get('result')
     if result not in ALLOWED_RESULTS:
         raise ValueError('Unexpected xcresult node result: ' + repr(result))
@@ -135,9 +137,12 @@ def _walk_node(node, stats):
         stats['redacted'] += 1
     duration = node.get('duration')
     if duration is not None:
-        if type(duration) not in (int, float) or isinstance(duration, bool) or duration < 0:
-            raise ValueError('Invalid xcresult node duration')
-        clean['duration'] = duration
+        if type(duration) in (int, float) and not isinstance(duration, bool) and duration >= 0:
+            clean['duration'] = duration
+        else:
+            # Duration shape is decoration, not an invariant (no-leak and
+            # tally-match still hold); an unrecognized form is dropped.
+            stats['dropped'] += 1
     for key in REDACT_KEYS:
         if key in node:
             clean[key] = _redact(node[key])
@@ -153,11 +158,9 @@ def _walk_node(node, stats):
 
 def _count_cases(node, tallies):
     if 'children' in node:
-        if node['nodeType'] in CASE_NODE_TYPES:
-            raise ValueError('xcresult test case must not have children')
         return sum(_count_cases(child, tallies) for child in node['children'])
-    if node['nodeType'] not in CASE_NODE_TYPES:
-        raise ValueError('Non-case node without children')
+    # Shape-driven: every leaf is a test case. A schema that produced only
+    # containers would yield zero cases and fail the aggregate-count match.
     tallies[node['result']] += 1
     return 1
 
@@ -165,10 +168,12 @@ def _count_cases(node, tallies):
 def sanitize_report(payload, summary):
     """Full sanitized test tree from `xcresulttool get test-results tests`.
 
-    Keeps structure, results, and durations only. Names that are not plain
-    identifiers and all free text become length-only redaction markers;
+    Shape-driven sanitizer: containers are nodes with a children list, cases
+    are leaves. Known type labels pass through, unknown labels and any
+    non-identifier name become length-only redaction markers; free text,
     internal ids, attachments, and unknown keys are dropped and counted.
-    Fails closed on schema drift or any disagreement with the aggregate.
+    Structural drift (wrong root, non-list children, unknown result value)
+    aborts, as does any disagreement with the aggregate summary.
     """
     clean_summary = sanitize_summary(summary)
     if isinstance(payload, dict):
