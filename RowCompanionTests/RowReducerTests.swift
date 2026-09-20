@@ -153,7 +153,7 @@ final class RowReducerTests: XCTestCase {
     func testInvariantSweepOverActionSequences() throws {
         for seed: UInt64 in 0..<200 {
             var rng = SeededGenerator(seed: seed)
-            var piece = makePiece(rows: Int.random(in: 0..<50, using: &rng), repeatLength: Bool.random(using: &rng) ? Int.random(in: 1...8, using: &rng) : nil)
+            var piece = makePiece(rows: Int.random(in: 0..<50, using: &rng), length: Bool.random(using: &rng) ? Int.random(in: 1...8, using: &rng) : nil)
             var history: [RowEvent] = []
             var sequence = 1
             for _ in 0..<25 {
