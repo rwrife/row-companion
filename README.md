@@ -4,7 +4,7 @@ Local-first iPhone workspace for knitters and crocheters to keep pattern PDFs be
 
 ## Status
 
-**iOS bootstrap source and CI wiring.** The repository contains the native Xcode project, shared scheme, SwiftUI launch placeholder, unit test, and XCUITest launch smoke. Pattern import, persistence, and counters are not implemented yet. Native acceptance requires the exact-head macOS CI result; Linux helper tests are not iOS build evidence. See [PLAN.md](PLAN.md) and [issue #1](https://github.com/rwrife/row-companion/issues/1).
+**Row domain and durable local repository (issue #2).** The repository contains the native Xcode project, shared scheme, SwiftUI launch placeholder, and the tested row layer: pure repeat-aware row arithmetic/reducer plus a CloudKit-disabled SwiftData repository with atomic event+count commits (with save-fault injection and future-schema fail-closed checks). Pattern import, workspace UI, and backup/restore are not implemented yet. Native acceptance requires the exact-head macOS CI result; Linux helper tests are not iOS build evidence. See [PLAN.md](PLAN.md) and [issue #2](https://github.com/rwrife/row-companion/issues/2).
 
 ## Why / who
 
