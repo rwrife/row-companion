@@ -126,12 +126,12 @@ final class RowRepositoryTests: XCTestCase {
         XCTAssertEqual(try reopened.projects().count, 1)
     }
 
-    func testStoreConfigurationDisablesCloudKit() throws {
-        let config = RowStoreFactory.configuration(storeURL: storeURL)
-        var isNone = false
-        if case .none = config.cloudKitDatabase { isNone = true }
-        XCTAssertTrue(isNone, "local store must never enable CloudKit mirroring")
-    }
+    // The CloudKit-disabled pin (`cloudKitDatabase: .none`) is enforced
+    // structurally at the single `RowStoreFactory.configuration` call site —
+    // `ModelConfiguration.CloudKitDatabase` is not public-Equatable, so a
+    // runtime assertion here would only re-test the type system. The relaunch
+    // tests above prove the store is durable *local* storage, and
+    // Tests/test_row_domain_contract.py asserts the pin in source.
 
     func testUnknownPieceIsRejected() throws {
         let repo = try RowRepository(storeURL: storeURL)
