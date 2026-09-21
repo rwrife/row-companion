@@ -4,7 +4,7 @@ Local-first iPhone workspace for knitters and crocheters to keep pattern PDFs be
 
 ## Status
 
-**Row domain and durable local repository (issue #2).** The repository contains the native Xcode project, shared scheme, SwiftUI launch placeholder, and the tested row layer: pure repeat-aware row arithmetic/reducer plus a CloudKit-disabled SwiftData repository with atomic event+count commits (with save-fault injection and future-schema fail-closed checks). Pattern import, workspace UI, and backup/restore are not implemented yet. Native acceptance requires the exact-head macOS CI result; Linux helper tests are not iOS build evidence. See [PLAN.md](PLAN.md) and [issue #2](https://github.com/rwrife/row-companion/issues/2).
+**PDF import and resumable project/piece workspace (issue #3).** The repository contains the native Xcode project, shared scheme, and the tested layers so far: the repeat-aware row domain, a CloudKit-disabled SwiftData repository with atomic commits, and now bounded PDF import (50 MiB / 500-page pre-flight limits, generated app-owned filenames, staged import with no partial records on failure, locked/corrupt/zero-page/oversized rejection), the PDFKit viewer seam with the documented top-left normalized viewport convention and clamp-on-restore rules, per-piece durable reference state (page, zoomed visible rect, manual guide, notes), and the compact/two-pane `WorkspaceLayout` seam with selection that can never advance counts. Real simulator integration runs on the pinned macOS CI job; Linux helper tests are not iOS build evidence. See [PLAN.md](PLAN.md) and [issue #3](https://github.com/rwrife/row-companion/issues/3).
 
 ## Why / who
 

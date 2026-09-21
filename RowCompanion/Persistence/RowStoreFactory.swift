@@ -7,11 +7,23 @@ import SwiftData
 /// repository has no account, sync, or network surface.
 @MainActor
 public enum RowStoreFactory {
+    /// App-private store location inside Application Support (file
+    /// protection follows device lock policy; no CloudKit, see
+    /// `configuration`).
+    public static func defaultStoreURL() -> URL {
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        return base
+            .appendingPathComponent("RowCompanion", isDirectory: true)
+            .appendingPathComponent("rowcompanion.sqlite")
+    }
+
     /// Current on-disk schema version stamped into every fresh store.
-    public static let schemaVersion = 1
+    /// v2 adds `StoredPatternDocument` + `StoredReferenceState` (issue #3).
+    public static let schemaVersion = 2
 
     public static var schema: Schema {
-        Schema([StoredProject.self, StoredPiece.self, StoredRowEvent.self, StoredStoreInfo.self])
+        Schema([StoredProject.self, StoredPiece.self, StoredRowEvent.self, StoredStoreInfo.self,
+                StoredPatternDocument.self, StoredReferenceState.self])
     }
 
     /// Local, non-mirrored configuration for the given store URL.
