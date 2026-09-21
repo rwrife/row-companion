@@ -126,11 +126,14 @@ def _walk_node(node, stats):
         clean['nodeType'] = _redact(node_type)
         stats['redacted'] += 1
     result = node.get('result')
-    if result is None and isinstance(children, list):
-        # Real hosted evidence (run 35656419607, Xcode 26.0.1): container
-        # nodes such as the Test Plan root can omit `result` entirely.
-        # Only LEAVES must carry an allowed verdict; a resultless container
-        # is structural, so record no result for it and keep walking.
+    if result is None:
+        # Real hosted evidence (runs 35656419607 / 35661673966, Xcode 26.0.1):
+        # structural nodes (Test Plan root, empty wrappers) can omit `result`
+        # entirely, with or without a children list. Tolerate exactly None and
+        # publish the node without a verdict; only counted leaves must carry a
+        # Passed/Failed/Skipped verdict. If a real test case ever lacked one,
+        # the leaf tally would disagree with the aggregate summary and the
+        # export still aborts below.
         pass
     elif result not in ALLOWED_RESULTS:
         raise ValueError('Unexpected xcresult node result: ' + repr(result))
@@ -166,8 +169,13 @@ def _walk_node(node, stats):
 def _count_cases(node, tallies):
     if 'children' in node:
         return sum(_count_cases(child, tallies) for child in node['children'])
-    # Shape-driven: every leaf is a test case. A schema that produced only
-    # containers would yield zero cases and fail the aggregate-count match.
+    if 'result' not in node:
+        # Structural node published without a verdict (see _walk_node);
+        # not a test case, contributes nothing to the tally.
+        return 0
+    # Shape-driven: every leaf with a verdict is a test case. A schema that
+    # produced only containers would yield zero cases and fail the
+    # aggregate-count match.
     tallies[node['result']] += 1
     return 1
 

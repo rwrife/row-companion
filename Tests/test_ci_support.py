@@ -174,6 +174,30 @@ class CISupportTests(unittest.TestCase):
         # A node type that is not an enum word (long free-text-like label)
         # cannot smuggle content: SAFE_NAME never matches, so it redacts.
 
+    def test_resultless_structural_nodes_are_walked_not_fatal(self):
+        # Real hosted runs 35656419607 / 35661673966 (Xcode 26.0.1): the
+        # tests tree contains nodes WITHOUT any 'result' field (Test Plan
+        # root and a resultless leaf-shaped wrapper). They must be walked
+        # without aborting and must not count as test cases; the leaf
+        # tally must still agree with the aggregate summary.
+        summary = {'totalTestCount': 1, 'passedTests': 1, 'failedTests': 0,
+                   'skippedTests': 0, 'result': 'Passed'}
+        tree = {'testNodes': [{'nodeType': 'Test Plan',
+                               'name': '/Users/runner/work/row-companion/RowCompanion.xctestplan',
+                               'children': [
+                                   {'nodeType': 'Unit test bundle', 'name': 'RowCompanionTests.xctest',
+                                    'result': 'Passed',
+                                    'children': [{'nodeType': 'Test Case', 'name': 'testRootView',
+                                                  'result': 'Passed', 'duration': 0.4}]},
+                                   {'nodeType': 'UI test bundle', 'name': 'RowCompanionUITests.xctest'}]}]}
+        report = self.support.sanitize_report(tree, summary)
+        self.assertEqual(report['caseCount'], 1)
+        root = report['testNodes'][0]
+        self.assertNotIn('result', root)
+        # A resultless node with a NON-leaf shape must also be tolerated.
+        self.assertEqual(len(root['children']), 2)
+        self.assertNotIn('result', root['children'][1])
+
     def test_report_fails_closed_on_summary_tree_mismatch(self):
         summary = {'totalTestCount': 2, 'passedTests': 2, 'failedTests': 0,
                    'skippedTests': 0, 'result': 'Passed'}
