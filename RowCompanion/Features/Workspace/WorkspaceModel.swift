@@ -262,8 +262,13 @@ public final class WorkspaceModel {
         let previousReference = reference
         do {
             projects = try repository.projects()
-            documents = selectedProjectID.map { try repository.documents(in: $0) } ?? []
-            pieces = selectedProjectID.map { try repository.pieces(in: $0) } ?? []
+            if let projectID = selectedProjectID {
+                documents = try repository.documents(in: projectID)
+                pieces = try repository.pieces(in: projectID)
+            } else {
+                documents = []
+                pieces = []
+            }
         } catch {
             lastError = .rowActionFailed(error as? RowRepositoryError ?? .storeUnavailable(underlying: String(describing: error)))
         }

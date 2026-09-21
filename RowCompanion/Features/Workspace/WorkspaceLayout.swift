@@ -18,7 +18,7 @@ struct WorkspaceLayout: View {
         // Two panes need regular width AND readable type; reflow to stacked
         // when Dynamic Type would make a side pane unusable.
         let useTwoPane = horizontalSizeClass == .regular
-            && dynamicTypeSize < .accessibilityLarge
+            && !dynamicTypeSize.isAccessibilitySize
         if useTwoPane {
             RegularWorkspace()
         } else {

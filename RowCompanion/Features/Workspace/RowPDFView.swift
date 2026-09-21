@@ -27,7 +27,11 @@ struct RowPDFView: UIViewRepresentable {
         view.autoScales = true
         view.displayMode = .singlePageContinuous
         view.displayDirection = .vertical
+        #if os(macOS)
+        // Selection/link UI is an AppKit PDFView surface; iOS PDFView does
+        // not expose it (so it structurally cannot follow document links).
         view.isSelectionEnabled = false
+        #endif
         view.document = openDocument()
         view.delegate = context.coordinator
         context.coordinator.pdfView = view
@@ -121,7 +125,7 @@ struct RowPDFView: UIViewRepresentable {
                 view.go(to: page)
                 let pageSize = page.bounds(for: .mediaBox)
                 guard pageSize.width > 0, pageSize.height > 0 else { return }
-                let target = PDFCoordinateSpace.pageRect(for: state.visibleRect, pageSize: pageSize)
+                let target = PDFCoordinateSpace.pageRect(for: state.visibleRect, pageSize: pageSize.size)
                 let scale = Swift.max(1, Swift.min(view.bounds.width / Swift.max(target.width, 1), 4))
                 view.scaleFactor = scale
             }
@@ -134,7 +138,7 @@ struct RowPDFView: UIViewRepresentable {
                   let page = view.currentPage, let document = view.document else { return }
             let pageSize = page.bounds(for: .mediaBox)
             let visible = view.convert(view.bounds, to: page)
-            let visibleInPage = PDFCoordinateSpace.normalizedRect(for: visible, pageSize: pageSize)
+            let visibleInPage = PDFCoordinateSpace.normalizedRect(for: visible, pageSize: pageSize.size)
             onMoved(document.index(for: page), visibleInPage)
         }
     }
