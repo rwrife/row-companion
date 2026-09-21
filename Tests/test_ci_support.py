@@ -174,12 +174,35 @@ class CISupportTests(unittest.TestCase):
         # A node type that is not an enum word (long free-text-like label)
         # cannot smuggle content: SAFE_NAME never matches, so it redacts.
 
-    def test_resultless_structural_nodes_are_walked_not_fatal(self):
-        # Real hosted runs 35656419607 / 35661673966 (Xcode 26.0.1): the
-        # tests tree contains nodes WITHOUT any 'result' field (Test Plan
-        # root and a resultless leaf-shaped wrapper). They must be walked
-        # without aborting and must not count as test cases; the leaf
-        # tally must still agree with the aggregate summary.
+    def test_resultless_nodes_are_walked_and_inherit_unique_verdict(self):
+        # Real hosted runs 35656419607 / 35661673966 / 35662926491
+        # (Xcode 26.0.1): the tests tree contains nodes WITHOUT a 'result'
+        # field — a 'Test Plan' root AND a leaf-shaped 'UI test bundle'
+        # wrapper. The aggregate summary counted 57/57 Passed while only 56
+        # tree nodes carried verdicts, so the resultless leaf-shaped node IS
+        # one of the counted cases. It must be tallied exactly once under
+        # its uniquely-verdicted ancestors, not abort the export.
+        summary = {'totalTestCount': 2, 'passedTests': 2, 'failedTests': 0,
+                   'skippedTests': 0, 'result': 'Passed'}
+        tree = {'testNodes': [{'nodeType': 'Test Plan',
+                               'name': '/Users/runner/work/row-companion/RowCompanion.xctestplan',
+                               'result': 'Passed',
+                               'children': [
+                                   {'nodeType': 'Unit test bundle', 'name': 'RowCompanionTests.xctest',
+                                    'result': 'Passed',
+                                    'children': [{'nodeType': 'Test Case', 'name': 'testRootView',
+                                                  'result': 'Passed', 'duration': 0.4}]},
+                                   {'nodeType': 'UI test bundle', 'name': 'RowCompanionUITests.xctest'}]}]}
+        report = self.support.sanitize_report(tree, summary)
+        self.assertEqual(report['caseCount'], 2)
+        root = report['testNodes'][0]
+        self.assertEqual(len(root['children']), 2)
+        self.assertNotIn('result', root['children'][1])
+
+    def test_resultless_root_container_is_walked(self):
+        # The 'Test Plan' root itself may omit 'result' (run 35656419607).
+        # That stays structural (zero cases of its own) as long as every
+        # verdicted leaf carries its own verdict.
         summary = {'totalTestCount': 1, 'passedTests': 1, 'failedTests': 0,
                    'skippedTests': 0, 'result': 'Passed'}
         tree = {'testNodes': [{'nodeType': 'Test Plan',
@@ -188,15 +211,25 @@ class CISupportTests(unittest.TestCase):
                                    {'nodeType': 'Unit test bundle', 'name': 'RowCompanionTests.xctest',
                                     'result': 'Passed',
                                     'children': [{'nodeType': 'Test Case', 'name': 'testRootView',
-                                                  'result': 'Passed', 'duration': 0.4}]},
-                                   {'nodeType': 'UI test bundle', 'name': 'RowCompanionUITests.xctest'}]}]}
+                                                  'result': 'Passed', 'duration': 0.4}]}]}]}
         report = self.support.sanitize_report(tree, summary)
         self.assertEqual(report['caseCount'], 1)
-        root = report['testNodes'][0]
-        self.assertNotIn('result', root)
-        # A resultless node with a NON-leaf shape must also be tolerated.
-        self.assertEqual(len(root['children']), 2)
-        self.assertNotIn('result', root['children'][1])
+        self.assertNotIn('result', report['testNodes'][0])
+
+    def test_resultless_leaf_without_unique_ancestors_fails_closed(self):
+        # An un-verdicted leaf under ancestors with conflicting verdicts
+        # cannot inherit unambiguously: the tree cannot attest it.
+        summary = {'totalTestCount': 3, 'passedTests': 2, 'failedTests': 1,
+                   'skippedTests': 0, 'result': 'Failed'}
+        tree = [{'nodeType': 'Suite', 'name': 'Ambiguous', 'result': 'Passed',
+                 'children': [
+                     {'nodeType': 'Test Case', 'name': 'a', 'result': 'Passed'},
+                     {'nodeType': 'Suite', 'name': 'Inner', 'result': 'Failed',
+                      'children': [
+                          {'nodeType': 'Test Case', 'name': 'b', 'result': 'Failed'},
+                          {'nodeType': 'Test Case', 'name': 'c'}]}]}]
+        with self.assertRaisesRegex(ValueError, 'no unique enclosing verdict'):
+            self.support.sanitize_report(tree, summary)
 
     def test_report_fails_closed_on_summary_tree_mismatch(self):
         summary = {'totalTestCount': 2, 'passedTests': 2, 'failedTests': 0,
