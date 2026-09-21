@@ -77,7 +77,7 @@ final class ReferenceStateTests: XCTestCase {
 
         let leftRef = try XCTUnwrap(try relaunched.referenceState(for: left.id))
         XCTAssertEqual(leftRef.pageIndex, 2)
-        XCTAssertEqual(leftRef.guideY, 0.33, accuracy: 1e-9)
+        XCTAssertEqual(try XCTUnwrap(leftRef.guideY), 0.33, accuracy: 1e-9)
         XCTAssertEqual(leftRef.visibleRect.height, 0.4, accuracy: 1e-9)
         XCTAssertEqual(leftRef.documentID, doc.id)
 
@@ -198,6 +198,6 @@ final class ReferenceStateTests: XCTestCase {
         let relaunched = try RowRepository.open(storeURL: storeURL)
         let state = try XCTUnwrap(try relaunched.referenceState(for: piece.id))
         XCTAssertNil(state.documentID)
-        XCTAssertEqual(state.guideY, 0.5, accuracy: 1e-9)
+        XCTAssertEqual(try XCTUnwrap(state.guideY), 0.5, accuracy: 1e-9)
     }
 }
