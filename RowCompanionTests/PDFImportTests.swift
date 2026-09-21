@@ -79,7 +79,7 @@ final class PDFImportTests: XCTestCase {
         try handle.close()
 
         XCTAssertThrowsError(try PDFImport.performImport(sourceURL: big, storeURL: storeURL)) { error in
-            guard case PDFImportError.oversizedFile = error as? PDFImportError else {
+            guard case PDFImportError.oversizedFile? = error as? PDFImportError else {
                 return XCTFail("expected oversizedFile, got \(error)")
             }
         }
@@ -93,7 +93,7 @@ final class PDFImportTests: XCTestCase {
         let junk = tempDir.appendingPathComponent("junk.pdf")
         try Data("this is not a pdf at all".utf8).write(to: junk)
         XCTAssertThrowsError(try PDFImport.performImport(sourceURL: junk, storeURL: storeURL)) { error in
-            guard case PDFImportError.notAValidPDF = error as? PDFImportError else {
+            guard case PDFImportError.notAValidPDF? = error as? PDFImportError else {
                 return XCTFail("expected notAValidPDF, got \(error)")
             }
         }
@@ -119,7 +119,7 @@ final class PDFImportTests: XCTestCase {
         struct DiskFull: Error {}
         PDFImport.testHookBeforeFinalMove = { throw DiskFull() }
         XCTAssertThrowsError(try PDFImport.performImport(sourceURL: source, storeURL: storeURL)) { error in
-            guard case PDFImportError.storageFailure = error as? PDFImportError else {
+            guard case PDFImportError.storageFailure? = error as? PDFImportError else {
                 return XCTFail("expected storageFailure, got \(error)")
             }
         }
