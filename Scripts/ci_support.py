@@ -126,9 +126,16 @@ def _walk_node(node, stats):
         clean['nodeType'] = _redact(node_type)
         stats['redacted'] += 1
     result = node.get('result')
-    if result not in ALLOWED_RESULTS:
+    if result is None and isinstance(children, list):
+        # Real hosted evidence (run 35656419607, Xcode 26.0.1): container
+        # nodes such as the Test Plan root can omit `result` entirely.
+        # Only LEAVES must carry an allowed verdict; a resultless container
+        # is structural, so record no result for it and keep walking.
+        pass
+    elif result not in ALLOWED_RESULTS:
         raise ValueError('Unexpected xcresult node result: ' + repr(result))
-    clean['result'] = result
+    else:
+        clean['result'] = result
     name = node.get('name')
     if isinstance(name, str) and SAFE_NAME.fullmatch(name):
         clean['name'] = name
