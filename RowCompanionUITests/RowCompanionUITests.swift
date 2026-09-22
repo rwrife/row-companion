@@ -71,4 +71,60 @@ final class RowCompanionUITests: XCTestCase {
                       "relaunched app must retain the committed count")
         XCTAssertEqual(app.state, .runningForeground)
     }
+
+    /// Issue #4 accessibility evidence: completed rows and the next repeat
+    /// row are separate, explicitly-labelled elements — the exact strings a
+    /// VoiceOver user hears (`label` is what assistive tech reads), never a
+    /// merged container.
+    func testCompletedAndNextRepeatRowsHaveSeparateAccessibilityLabels() {
+        createProject("Label Scarf", piece: "Cuff", repeatLength: "8")
+
+        let complete = app.buttons["control.completeRow"]
+        XCTAssertTrue(complete.waitForExistence(timeout: 5))
+        complete.tap()
+        complete.tap()
+
+        let completed = app.staticTexts["row.completed"]
+        XCTAssertTrue(completed.waitForExistence(timeout: 5))
+        XCTAssertTrue(completed.label.contains("Completed rows 2"),
+                      "completed readout must be its own labelled value, got \(completed.label)")
+
+        let next = app.staticTexts["row.next"]
+        XCTAssertTrue(next.waitForExistence(timeout: 5))
+        XCTAssertTrue(next.label.contains("Next repeat row 3"),
+                      "next repeat row must be a distinct labelled value, got \(next.label)")
+    }
+
+    /// Issue #4: in the two-pane (regular-width) arrangement, reordering the
+    /// panes and relaunching must preserve the committed count, and the
+    /// reorder itself must never create a row event. The forced-two-pane
+    /// launch argument renders the regular branch on the compact CI phone so
+    /// this journey is actually executable on the pinned simulator.
+    func testTwoPaneReorderPreservesStateAndEmitsNoRowEvent() {
+        createProject("Pane Scarf", piece: "Back", repeatLength: "8")
+
+        let complete = app.buttons["control.completeRow"]
+        XCTAssertTrue(complete.waitForExistence(timeout: 5))
+        complete.tap()
+
+        // Relaunch through the two-pane branch (no reset flag — the same
+        // durable store must show the committed count).
+        app.launchArguments = ["-rc-force-two-pane"]
+        app.terminate()
+        app.launch()
+        let completed = app.staticTexts["row.completed"]
+        XCTAssertTrue(completed.waitForExistence(timeout: 15))
+        XCTAssertTrue(completed.label.contains("1"),
+                      "durable count must survive branch switch, got \(completed.label)")
+
+        app.buttons["control.paneOrder"].tap()
+        XCTAssertTrue(completed.label.contains("1"),
+                      "pane reorder is arrangement only — it must not change the count")
+
+        app.terminate()
+        app.launch()
+        XCTAssertTrue(app.staticTexts["row.completed"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.staticTexts["row.completed"].label.contains("1"),
+                      "relaunch after reorder must show the same committed count")
+    }
 }
