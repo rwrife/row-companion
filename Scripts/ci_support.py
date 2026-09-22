@@ -126,9 +126,21 @@ def _walk_node(node, stats):
         clean['nodeType'] = _redact(node_type)
         stats['redacted'] += 1
     result = node.get('result')
-    if result not in ALLOWED_RESULTS:
+    if result is None:
+        # Real hosted evidence (runs 35656419607 / 35661673966 / 35662926491,
+        # Xcode 26.0.1): nodes can omit `result` entirely — the Test Plan
+        # root, empty wrappers, and even a test-case leaf (aggregate summary
+        # counted 57/57 Passed while the tree carried 56 verdicts, so the
+        # resultless leaf was one of those passing cases). Tolerate exactly
+        # None; such a node is published without its own verdict, and if it
+        # is leaf-shaped it is tallied under its enclosing bundle/suite's
+        # unique verdict (see _count_cases). Unknown NON-null results still
+        # fail closed.
+        pass
+    elif result not in ALLOWED_RESULTS:
         raise ValueError('Unexpected xcresult node result: ' + repr(result))
-    clean['result'] = result
+    else:
+        clean['result'] = result
     name = node.get('name')
     if isinstance(name, str) and SAFE_NAME.fullmatch(name):
         clean['name'] = name
@@ -156,11 +168,32 @@ def _walk_node(node, stats):
     return clean
 
 
-def _count_cases(node, tallies):
+def _count_cases(node, tallies, ancestor_verdicts=()):
     if 'children' in node:
-        return sum(_count_cases(child, tallies) for child in node['children'])
-    # Shape-driven: every leaf is a test case. A schema that produced only
-    # containers would yield zero cases and fail the aggregate-count match.
+        verdicts = tuple(ancestor_verdicts)
+        if 'result' in node:
+            verdicts = verdicts + (node['result'],)
+        return sum(_count_cases(child, tallies, verdicts)
+                   for child in node['children'])
+    if 'result' not in node:
+        # Structural node or a test-case leaf published WITHOUT its own
+        # verdict (runs 35656419607 / 35661673966 / 35662926491, Xcode
+        # 26.0.1: the aggregate summary counted 57/57 Passed while the
+        # tree carried only 56 verdicts — the resultless leaf is one of
+        # those counted cases). Tally it only when every enclosing
+        # container shares exactly one verdict, so the inherited verdict
+        # is unambiguous; otherwise the tree cannot attest this leaf and
+        # the export fails closed.
+        unique = set(ancestor_verdicts)
+        if len(unique) != 1:
+            raise ValueError(
+                'Resultless xcresult leaf has no unique enclosing verdict: '
+                + json.dumps(sorted(unique)))
+        tallies[next(iter(unique))] += 1
+        return 1
+    # Shape-driven: every leaf with a verdict is a test case. A schema that
+    # produced only containers would yield zero cases and fail the
+    # aggregate-count match.
     tallies[node['result']] += 1
     return 1
 

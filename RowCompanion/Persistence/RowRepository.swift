@@ -7,6 +7,7 @@ import SwiftData
 public enum RowRepositoryError: Error, Equatable {
     case projectNotFound(UUID)
     case pieceNotFound(UUID)
+    case documentNotFound(UUID)
     case saveFailed(underlying: String)
     case unsupportedSchemaVersion(found: Int)
     case storeUnavailable(underlying: String)
@@ -28,6 +29,7 @@ public final class RowRepository {
     var testSaveFault: (() throws -> Void)?
 
     public init(storeURL: URL) throws {
+        self.storeURL = storeURL
         self.container = try RowStoreFactory.makeContainer(storeURL: storeURL)
         self.context = ModelContext(container)
     }
@@ -37,6 +39,15 @@ public final class RowRepository {
         guard FileManager.default.fileExists(atPath: storeURL.path) else {
             throw RowRepositoryError.storeUnavailable(underlying: "missing store at \(storeURL.lastPathComponent)")
         }
+        return try RowRepository(storeURL: storeURL)
+    }
+
+    /// First-launch or relaunch: create the store if absent, otherwise open
+    /// the existing one. Used by the app process at startup only; tests keep
+    /// using the explicit create/`open` pair to prove durability.
+    public static func openOrCreate(storeURL: URL) throws -> RowRepository {
+        let fm = FileManager.default
+        try fm.createDirectory(at: storeURL.deletingLastPathComponent(), withIntermediateDirectories: true)
         return try RowRepository(storeURL: storeURL)
     }
 
@@ -88,6 +99,110 @@ public final class RowRepository {
     public func setNotes(_ notes: String, on pieceID: UUID) throws {
         guard let stored = try storedPiece(pieceID) else { throw RowRepositoryError.pieceNotFound(pieceID) }
         stored.notes = notes
+        try commit()
+    }
+
+    // MARK: - Pattern documents (issue #3)
+
+    /// The store file URL this repository was opened with; imported PDFs live
+    /// in a sibling generated directory (`PDFImport.documentsDirectory`).
+    public let storeURL: URL
+
+    /// Import a user-picked PDF for `projectID` through the bounded importer.
+    /// On success a `PatternDocument` record exists and the PDF bytes live at
+    /// a generated app-owned path; on any `PDFImportError` nothing durable
+    /// changed (no record, no file) because the record is only written after
+    /// the importer reports success.
+    @discardableResult
+    public func importPatternDocument(from sourceURL: URL, for projectID: UUID) throws -> PatternDocumentRecord {
+        guard try projectExists(projectID) else { throw RowRepositoryError.projectNotFound(projectID) }
+        let accepted = try PDFImport.performImport(sourceURL: sourceURL, storeURL: storeURL)
+        let stored = StoredPatternDocument(
+            id: accepted.documentID,
+            projectID: projectID,
+            relativePath: "RowCompanionImported/\(accepted.storedFileName)",
+            sha256: accepted.sha256,
+            pageCount: accepted.pageCount
+        )
+        context.insert(stored)
+        do {
+            try commit()
+        } catch {
+            // The record was refused — remove the bytes the importer wrote so
+            // no orphaned document survives without its metadata.
+            let fileURL = PDFImport.documentsDirectory(storeURL: storeURL)
+                .appendingPathComponent(accepted.storedFileName)
+            try? FileManager.default.removeItem(at: fileURL)
+            throw error
+        }
+        return stored.record
+    }
+
+    public func documents(in projectID: UUID) throws -> [PatternDocumentRecord] {
+        let id = projectID
+        let descriptor = FetchDescriptor<StoredPatternDocument>(
+            predicate: #Predicate { $0.projectID == id },
+            sortBy: [SortDescriptor(\.id)]
+        )
+        return try context.fetch(descriptor).map(\.record)
+    }
+
+    /// Absolute URL of a stored document's app-owned copy.
+    public func documentFileURL(_ documentID: UUID) throws -> URL {
+        guard let stored = try storedDocument(documentID) else {
+            throw RowRepositoryError.documentNotFound(documentID)
+        }
+        return PDFImport.documentsDirectory(storeURL: storeURL)
+            .appendingPathComponent(stored.relativePath.components(separatedBy: "/").last ?? stored.relativePath)
+    }
+
+    // MARK: - Reference state / viewport (issue #3)
+
+    /// Read the piece's durable viewer state, clamped against the document's
+    /// current page count. `nil` when the piece has never recorded any.
+    public func referenceState(for pieceID: UUID) throws -> ReferenceState? {
+        guard let stored = try storedReferenceState(pieceID) else { return nil }
+        var state = stored.record
+        if let documentID = state.documentID, let doc = try storedDocument(documentID) {
+            state = ViewportClamp.clamp(state, pageCount: doc.pageCount)
+        } else {
+            // Document vanished (deleted/tampered): keep the page-agnostic
+            // view state but stop pointing at a missing document.
+            state.documentID = nil
+            state = ViewportClamp.clamp(state, pageCount: 0)
+        }
+        return state
+    }
+
+    /// Persist the piece's viewer state. Everything is clamped through the
+    /// pure rules before it reaches disk, so a hostile UI state cannot poison
+    /// the store. Switching pieces/documents simply targets another pieceID —
+    /// this API has no way to touch row counts.
+    public func saveReferenceState(_ state: ReferenceState) throws {
+        guard try storedPiece(state.pieceID) != nil else { throw RowRepositoryError.pieceNotFound(state.pieceID) }
+        if let documentID = state.documentID, try storedDocument(documentID) == nil {
+            throw RowRepositoryError.documentNotFound(documentID)
+        }
+        let clamped: ReferenceState
+        if let documentID = state.documentID, let doc = try storedDocument(documentID) {
+            clamped = ViewportClamp.clamp(state, pageCount: doc.pageCount)
+        } else {
+            clamped = ViewportClamp.clamp(state, pageCount: 0)
+        }
+        let stored: StoredReferenceState
+        if let existing = try storedReferenceState(state.pieceID) {
+            stored = existing
+        } else {
+            stored = StoredReferenceState(pieceID: clamped.pieceID, documentID: clamped.documentID, pageIndex: clamped.pageIndex, visibleRect: clamped.visibleRect, guideY: clamped.guideY)
+            context.insert(stored)
+        }
+        stored.documentID = clamped.documentID
+        stored.pageIndex = clamped.pageIndex
+        stored.rectX = clamped.visibleRect.x
+        stored.rectY = clamped.visibleRect.y
+        stored.rectWidth = clamped.visibleRect.width
+        stored.rectHeight = clamped.visibleRect.height
+        stored.guideY = clamped.guideY
         try commit()
     }
 
@@ -155,6 +270,18 @@ public final class RowRepository {
         let id = projectID
         let descriptor = FetchDescriptor<StoredProject>(predicate: #Predicate { $0.id == id })
         return try context.fetch(descriptor).first != nil
+    }
+
+    private func storedDocument(_ documentID: UUID) throws -> StoredPatternDocument? {
+        let id = documentID
+        let descriptor = FetchDescriptor<StoredPatternDocument>(predicate: #Predicate { $0.id == id })
+        return try context.fetch(descriptor).first
+    }
+
+    private func storedReferenceState(_ pieceID: UUID) throws -> StoredReferenceState? {
+        let id = pieceID
+        let descriptor = FetchDescriptor<StoredReferenceState>(predicate: #Predicate { $0.pieceID == id })
+        return try context.fetch(descriptor).first
     }
 
     private func latestEvent(for pieceID: UUID) throws -> RowEvent? {
