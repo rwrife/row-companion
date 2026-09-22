@@ -15,10 +15,19 @@ struct WorkspaceLayout: View {
 
     var body: some View {
         #if os(iOS)
-        // Two panes need regular width AND readable type; reflow to stacked
-        // when Dynamic Type would make a side pane unusable.
-        let useTwoPane = horizontalSizeClass == .regular
-            && !dynamicTypeSize.isAccessibilitySize
+        // Arrangement reads exactly two environment facts through the pure
+        // `WorkspaceArrangement` rules — nothing here touches durable state,
+        // so any reflow (rotation, size-class change, Dynamic Type growth,
+        // pane reorder) can never emit a row event or reset counters.
+        // The launch-argument override is a simulator-journey seam (same
+        // pattern as `-rc-ui-tests-reset`) so the two-pane branch and pane
+        // reorder can be exercised on the compact iPhone UDID CI boots;
+        // normal app launches never pass it.
+        let forcedTwoPane = CommandLine.arguments.contains("-rc-force-two-pane")
+        let useTwoPane = forcedTwoPane || WorkspaceArrangement.useTwoPane(
+            regularWidth: horizontalSizeClass == .regular,
+            isAccessibilitySize: dynamicTypeSize.isAccessibilitySize
+        )
         if useTwoPane {
             RegularWorkspace()
         } else {
@@ -42,12 +51,38 @@ private struct CompactWorkspace: View {
 }
 
 /// Regular width: reference beside the control/notes pane.
+///
+/// Pane order is user-reversible. The reorder is *arrangement only*: both
+/// panes are the same stateless keyed views and all durable state lives in
+/// `WorkspaceModel` above this branch, so flipping order cannot reset the
+/// count, notes, page, guide, or viewport, and cannot emit a row event.
 private struct RegularWorkspace: View {
+    @State private var paneOrder: WorkspacePaneOrder = .referenceFirst
+
     var body: some View {
-        HStack(spacing: 16) {
-            ReferencePane()
-            Divider()
-            ControlPane()
+        VStack(spacing: 8) {
+            HStack(spacing: 16) {
+                Group {
+                    switch paneOrder {
+                    case .referenceFirst:
+                        ReferencePane()
+                        Divider()
+                        ControlPane()
+                    case .controlsFirst:
+                        ControlPane()
+                        Divider()
+                        ReferencePane()
+                    }
+                }
+            }
+            Button {
+                paneOrder = WorkspaceArrangement.flipped(paneOrder)
+            } label: {
+                Label("Switch panes", systemImage: "rectangle.2.swap")
+                    .frame(minHeight: 44)
+            }
+            .buttonStyle(.bordered)
+            .accessibilityIdentifier("control.paneOrder")
         }
         .padding(.horizontal)
     }
@@ -135,6 +170,9 @@ private struct ControlPane: View {
                     ProgressReadout(piece: piece)
                     counterButtons
                     repeatPicker(piece: piece)
+                    if model.referenceDocumentURL != nil {
+                        guideSlider
+                    }
                     notesEditor(piece: piece)
                 } else {
                     Text("Add a project and a piece to start counting.")
@@ -145,6 +183,34 @@ private struct ControlPane: View {
             .padding(.vertical)
         }
         .frame(maxWidth: .infinity)
+    }
+
+    /// Manual reading guide control: a slider (VoiceOver-adjustable, keyboard
+    /// and Switch Control operable — no mandatory drag gesture on the PDF
+    /// itself) plus an explicit off switch. It writes only view state
+    /// through `WorkspaceModel.setGuide`, never a row action.
+    private var guideSlider: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Reading guide")
+                .font(.headline)
+            Slider(
+                value: Binding(
+                    get: { model.reference?.guideY ?? 0.5 },
+                    set: { model.setGuide(y: $0) }
+                ),
+                in: 0...1
+            ) {
+                Text("Guide position")
+            } minimumValueLabel: {
+                Image(systemName: "line.horizontal.3").accessibilityHidden(true)
+            } maximumValueLabel: {
+                Image(systemName: "line.horizontal.3").accessibilityHidden(true)
+            }
+            .accessibilityIdentifier("control.guideSlider")
+            Button("Guide off") { model.setGuide(y: nil) }
+                .frame(minHeight: 44)
+                .accessibilityIdentifier("control.guideOff")
+        }
     }
 
     private var counterButtons: some View {
