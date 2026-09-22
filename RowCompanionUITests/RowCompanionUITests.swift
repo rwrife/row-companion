@@ -95,6 +95,30 @@ final class RowCompanionUITests: XCTestCase {
                       "next repeat row must be a distinct labelled value, got \(next.label)")
     }
 
+    /// Issue #4 accessibility evidence recorded *in the simulator*:
+    /// actionable controls are visible+hittable with 44pt-minimum frames,
+    /// and the counter readouts expose their accessibility traits/labels
+    /// (what VoiceOver would surface) rather than being decoration.
+    func testControlsAreAccessibleHittableWith44PointFrames() {
+        createProject("AX Scarf", piece: "Sleeve", repeatLength: "8")
+
+        let complete = app.buttons["control.completeRow"]
+        XCTAssertTrue(complete.waitForExistence(timeout: 5))
+        XCTAssertTrue(complete.isHittable, "Complete row must be hittable, not decoration")
+        XCTAssertGreaterThanOrEqual(complete.frame.height, 44,
+                                    "counter target must meet the 44pt floor, got \(complete.frame.height)")
+        XCTAssertEqual(complete.label, "Complete row")
+
+        let undo = app.buttons["control.undo"]
+        XCTAssertTrue(undo.isHittable)
+        XCTAssertGreaterThanOrEqual(undo.frame.height, 44)
+
+        let completed = app.staticTexts["row.completed"]
+        XCTAssertTrue(completed.exists)
+        XCTAssertTrue(completed.label.hasPrefix("Completed rows"),
+                      "VoiceOver label must identify completed rows, got \(completed.label)")
+    }
+
     /// Issue #4: in the two-pane (regular-width) arrangement, reordering the
     /// panes and relaunching must preserve the committed count, and the
     /// reorder itself must never create a row event. The forced-two-pane
