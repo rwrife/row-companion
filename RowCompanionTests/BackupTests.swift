@@ -500,10 +500,11 @@ final class BackupTests: XCTestCase {
         let staged = try service.stageRestore(from: backupDir)
         let manifest = try service.readStagedManifest(stagedDirectory: staged)
         let validated = try service.validate(stagedManifest: manifest, stagedDirectory: staged)
-        var counter = 1_000
+        // Swift 6: the ID generator is @Sendable, so its counter must be
+        // concurrency-safe (the call sequence is deterministic regardless).
+        let counter = DeterministicCounter()
         let bundle = BackupFormat.remap(validated, newIDs: {
-            counter += 1
-            return UUID(uuidString: String(format: "00000000-0000-0000-0000-%012d", counter))!
+            UUID(uuidString: String(format: "00000000-0000-0000-0000-%012d", counter.next()))!
         })
         XCTAssertNotEqual(bundle.manifest.project.id, manifest.project.id)
         XCTAssertNotEqual(bundle.manifest.pieces[0].id, manifest.pieces[0].id)
@@ -513,11 +514,22 @@ final class BackupTests: XCTestCase {
         XCTAssertTrue(bundle.manifest.events.contains { $0.id == undone })
         XCTAssertFalse(manifest.events.contains { $0.id == undone }, "remapped undo must not reference an old ID")
         // Deterministic: same generator sequence -> same IDs.
-        var counter2 = 1_000
+        let counter2 = DeterministicCounter()
         let again = BackupFormat.remap(validated, newIDs: {
-            counter2 += 1
-            return UUID(uuidString: String(format: "00000000-0000-0000-0000-%012d", counter2))!
+            UUID(uuidString: String(format: "00000000-0000-0000-0000-%012d", counter2.next()))!
         })
         XCTAssertEqual(bundle.manifest, again.manifest)
+    }
+}
+
+/// Sendable monotonic counter for deterministic ID generators in tests.
+private final class DeterministicCounter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value = 1_000
+    func next() -> Int {
+        lock.lock()
+        defer { lock.unlock() }
+        value += 1
+        return value
     }
 }
