@@ -184,4 +184,39 @@ final class RowCompanionUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["row.completed"].label.contains("1"),
                       "relaunch after reorder must show the same committed count")
     }
+
+    /// Issue #5 privacy gate journey: the export sheet's progress button is
+    /// disabled until the acknowledgement toggle is on, and the full-backup
+    /// button additionally requires the originals-rights checkbox. (The
+    /// folder picker itself is system UI outside this app's automation
+    /// surface; the actual metadata-only export is proven by the unit-test
+    /// target's real-disk round trip in BackupTests.)
+    func testDefaultExportRequiresAcknowledgementAndWritesMetadataOnly() {
+        createProject("Export Scarf", piece: "Front", repeatLength: "8")
+
+        app.buttons["menu.add"].tap()
+        XCTAssertTrue(app.buttons["menu.export"].waitForExistence(timeout: 5))
+        app.buttons["menu.export"].tap()
+
+        let originalsToggle = app.switches["toggle.acknowledgeOriginals"]
+        XCTAssertTrue(originalsToggle.waitForExistence(timeout: 5))
+        let progressButton = app.buttons["button.exportProgress"]
+        let fullButton = app.buttons["button.exportFullBackup"]
+        XCTAssertTrue(progressButton.exists)
+        XCTAssertFalse(progressButton.isEnabled,
+                       "progress export must be gated on the privacy acknowledgement")
+        XCTAssertFalse(fullButton.isEnabled,
+                       "full backup must be gated on the originals-rights acknowledgement")
+
+        app.switches["toggle.acknowledgeExport"].tap()
+        XCTAssertTrue(progressButton.waitForExistence(timeout: 5))
+        XCTAssertTrue(progressButton.isEnabled,
+                      "acknowledged progress export must enable")
+        XCTAssertFalse(fullButton.isEnabled,
+                       "originals opt-in keeps its own separate acknowledgement")
+
+        app.switches["toggle.acknowledgeOriginals"].tap()
+        XCTAssertTrue(fullButton.waitForExistence(timeout: 5))
+        XCTAssertTrue(fullButton.isEnabled, "both acknowledgements enable the full backup")
+    }
 }

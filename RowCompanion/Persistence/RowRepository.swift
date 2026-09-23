@@ -22,7 +22,10 @@ public enum RowRepositoryError: Error, Equatable {
 @MainActor
 public final class RowRepository {
     public let container: ModelContainer
-    private let context: ModelContext
+    /// Single context for the process. Internal (not public) so the backup
+    /// extension in the same module can share it without exposing raw
+    /// context access to callers.
+    let context: ModelContext
 
     /// Fault-injection hook used by persistence tests: when set, the next
     /// durable commit throws instead of saving. Production never sets this.
@@ -260,7 +263,13 @@ public final class RowRepository {
 
     // MARK: - Internals
 
-    private func storedPiece(_ pieceID: UUID) throws -> StoredPiece? {
+    func storedProject(_ projectID: UUID) throws -> StoredProject? {
+        let id = projectID
+        let descriptor = FetchDescriptor<StoredProject>(predicate: #Predicate { $0.id == id })
+        return try context.fetch(descriptor).first
+    }
+
+    func storedPiece(_ pieceID: UUID) throws -> StoredPiece? {
         let id = pieceID
         let descriptor = FetchDescriptor<StoredPiece>(predicate: #Predicate { $0.id == id })
         return try context.fetch(descriptor).first
@@ -288,11 +297,13 @@ public final class RowRepository {
         try history(for: pieceID).last
     }
 
-    /// Durable commit point. `testSaveFault` runs *before* `save()` so tests
+    /// Durable commit point, shared by the counter path and the backup
+    /// extension (internal so same-module extensions reuse one discipline).
+    /// `testSaveFault` runs *before* `save()` so tests
     /// can prove that a rejected write leaves no partial state visible. On
     /// any failure the context is rolled back so the in-memory view can never
     /// diverge from what actually reached disk.
-    private func commit() throws {
+    func commit() throws {
         if let fault = testSaveFault {
             do {
                 try fault()

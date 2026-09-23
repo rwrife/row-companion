@@ -34,6 +34,11 @@
 		F3000000000000000000000C /* WorkspaceArrangement.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3000000000000000000000C /* WorkspaceArrangement.swift */; };
 		F3000000000000000000000D /* WorkspaceArrangementTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3000000000000000000000D /* WorkspaceArrangementTests.swift */; };
 		F90000000000000000000001 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E90000000000000000000001 /* Assets.xcassets */; };
+		F40000000000000000000001 /* BackupFormat.swift in Sources */ = {isa = PBXBuildFile; fileRef = E40000000000000000000001 /* BackupFormat.swift */; };
+		F40000000000000000000002 /* BackupRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = E40000000000000000000002 /* BackupRepository.swift */; };
+		F40000000000000000000003 /* BackupService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E40000000000000000000003 /* BackupService.swift */; };
+		F40000000000000000000004 /* BackupTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E40000000000000000000004 /* BackupTests.swift */; };
+		F40000000000000000000005 /* ByteCount.swift in Sources */ = {isa = PBXBuildFile; fileRef = E40000000000000000000005 /* ByteCount.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -84,6 +89,11 @@
 		E3000000000000000000000C /* WorkspaceArrangement.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceArrangement.swift; sourceTree = "<group>"; };
 		E3000000000000000000000D /* WorkspaceArrangementTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceArrangementTests.swift; sourceTree = "<group>"; };
 		E90000000000000000000001 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		E40000000000000000000001 /* BackupFormat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupFormat.swift; sourceTree = "<group>"; };
+		E40000000000000000000002 /* BackupRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupRepository.swift; sourceTree = "<group>"; };
+		E40000000000000000000003 /* BackupService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupService.swift; sourceTree = "<group>"; };
+		E40000000000000000000004 /* BackupTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupTests.swift; sourceTree = "<group>"; };
+		E40000000000000000000005 /* ByteCount.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ByteCount.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -141,6 +151,7 @@
 				D10000000000000000000002 /* Persistence */,
 				D30000000000000000000001 /* Documents */,
 				D30000000000000000000002 /* Features */,
+				D40000000000000000000001 /* Backup */,
 			);
 			path = RowCompanion;
 			sourceTree = "<group>";
@@ -156,6 +167,7 @@
 				E30000000000000000000009 /* PDFImportTests.swift */,
 				E3000000000000000000000A /* ReferenceStateTests.swift */,
 				E3000000000000000000000D /* WorkspaceArrangementTests.swift */,
+				E40000000000000000000004 /* BackupTests.swift */,
 			);
 			path = RowCompanionTests;
 			sourceTree = "<group>";
@@ -177,6 +189,7 @@
 				E30000000000000000000001 /* ReferenceState.swift */,
 				E30000000000000000000002 /* DocumentModels.swift */,
 				E3000000000000000000000B /* PDFCoordinateSpace.swift */,
+				E40000000000000000000005 /* ByteCount.swift */,
 			);
 			path = Domain;
 			sourceTree = "<group>";
@@ -217,6 +230,16 @@
 				E3000000000000000000000C /* WorkspaceArrangement.swift */,
 			);
 			path = Workspace;
+			sourceTree = "<group>";
+		};
+		D40000000000000000000001 /* Backup */ = {
+			isa = PBXGroup;
+			children = (
+				E40000000000000000000001 /* BackupFormat.swift */,
+				E40000000000000000000002 /* BackupRepository.swift */,
+				E40000000000000000000003 /* BackupService.swift */,
+			);
+			path = Backup;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -359,6 +382,10 @@
 				F30000000000000000000007 /* RowPDFView.swift in Sources */,
 				F3000000000000000000000B /* PDFCoordinateSpace.swift in Sources */,
 				F3000000000000000000000C /* WorkspaceArrangement.swift in Sources */,
+				F40000000000000000000001 /* BackupFormat.swift in Sources */,
+				F40000000000000000000002 /* BackupRepository.swift in Sources */,
+				F40000000000000000000003 /* BackupService.swift in Sources */,
+				F40000000000000000000005 /* ByteCount.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -374,6 +401,7 @@
 				F30000000000000000000009 /* PDFImportTests.swift in Sources */,
 				F3000000000000000000000A /* ReferenceStateTests.swift in Sources */,
 				F3000000000000000000000D /* WorkspaceArrangementTests.swift in Sources */,
+				F40000000000000000000004 /* BackupTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

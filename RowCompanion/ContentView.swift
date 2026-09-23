@@ -11,9 +11,23 @@ struct ContentView: View {
     @State private var showNewProject = false
     @State private var showNewPiece = false
     @State private var showImporter = false
+    @State private var showExportSheet = false
+    @State private var showFolderPicker = false
+    @State private var showDeleteConfirm = false
+    @State private var exportAcknowledged = false
+    @State private var fullBackupAcknowledged = false
+    @State private var deleteAcknowledged = false
     @State private var newProjectTitle = ""
     @State private var newPieceName = ""
     @State private var newPieceRepeat = ""
+    /// Which folder action the shared folder picker should run.
+    @State private var pendingFolderAction: FolderAction?
+
+    enum FolderAction {
+        case exportProgress
+        case fullBackup
+        case restore
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -46,6 +60,42 @@ struct ContentView: View {
         }
         .sheet(isPresented: $showNewProject) { newProjectSheet }
         .sheet(isPresented: $showNewPiece) { newPieceSheet }
+        .sheet(isPresented: $showExportSheet) { exportSheet }
+        .sheet(
+            isPresented: Binding(
+                get: { model.restorePreview != nil },
+                set: { if !$0 { model.cancelRestore() } }
+            )
+        ) { restoreSheet }
+        .fileImporter(isPresented: $showFolderPicker, allowedContentTypes: [.folder], allowsMultipleSelection: false) { result in
+            defer { pendingFolderAction = nil }
+            guard case .success(let urls) = result, let url = urls.first,
+                  let action = pendingFolderAction else { return }
+            switch action {
+            case .exportProgress: model.exportProgress(to: url)
+            case .fullBackup: model.exportFullBackup(to: url)
+            case .restore: model.prepareRestore(from: url)
+            }
+        }
+        .confirmationDialog(
+            "Delete this project?",
+            isPresented: $showDeleteConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("Delete Project", role: .destructive) {
+                model.deleteSelectedProject(confirmed: deleteAcknowledged)
+                deleteAcknowledged = false
+                showDeleteConfirm = false
+            }
+            .disabled(!deleteAcknowledged)
+            .accessibilityIdentifier("button.confirmDelete")
+            Button("Cancel", role: .cancel) {
+                model.deleteSelectedProject(confirmed: false)
+                deleteAcknowledged = false
+            }
+        } message: {
+            Text("The project, its pieces, history, and the pattern copies the app made for it are removed. \(model.deletionScopeNote)")
+        }
     }
 
     private var header: some View {
@@ -64,6 +114,16 @@ struct ContentView: View {
                     Button("Import pattern PDF", action: { showImporter = true })
                         .accessibilityIdentifier("menu.importPDF")
                         .disabled(model.selectedProjectID == nil || model.isImporting)
+                    Divider()
+                    Button("Export / Back Up…", action: { showExportSheet = true })
+                        .accessibilityIdentifier("menu.export")
+                        .disabled(model.selectedProjectID == nil || model.isBackupBusy)
+                    Button("Restore Backup…", action: { pendingFolderAction = .restore; showFolderPicker = true })
+                        .accessibilityIdentifier("menu.restore")
+                        .disabled(model.isBackupBusy)
+                    Button("Delete Project…", role: .destructive, action: { showDeleteConfirm = true })
+                        .accessibilityIdentifier("menu.delete")
+                        .disabled(model.selectedProjectID == nil)
                 } label: {
                     Image(systemName: "plus.circle")
                 }
@@ -158,6 +218,103 @@ struct ContentView: View {
                 }
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { showNewPiece = false }
+                }
+            }
+        }
+    }
+
+    // MARK: - Backup sheets (issue #5)
+
+    /// Privacy/copyright acknowledgements gate both export modes. The
+    /// default progress export warns about leaving app storage; the full
+    /// backup additionally warns about licensed originals and requires its
+    /// own checkbox before its button enables.
+    private var exportSheet: some View {
+        NavigationStack {
+            // Plain ScrollView/VStack (not a lazy List) so both toggles and
+            // both buttons are laid out immediately on compact phones — the
+            // privacy gates must never be reachable only by scrolling.
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Progress export (default)").font(.headline)
+                        ForEach(model.exportWarnings, id: \.self) { warning in
+                            Text(warning)
+                                .font(.footnote)
+                        }
+                        Toggle(isOn: $exportAcknowledged) {
+                            Text("I understand where this file goes is my responsibility")
+                        }
+                        .accessibilityIdentifier("toggle.acknowledgeExport")
+                        Button("Choose Folder…") {
+                            pendingFolderAction = .exportProgress
+                            showFolderPicker = true
+                            showExportSheet = false
+                        }
+                        .disabled(!exportAcknowledged || model.isBackupBusy)
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .accessibilityIdentifier("button.exportProgress")
+                    }
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Full backup (includes your pattern PDFs)").font(.headline)
+                        ForEach(model.fullBackupWarnings, id: \.self) { warning in
+                            Text(warning)
+                                .font(.footnote)
+                                .foregroundStyle(.red)
+                        }
+                        Toggle(isOn: $fullBackupAcknowledged) {
+                            Text("I have the right to keep and move these pattern copies")
+                        }
+                        .accessibilityIdentifier("toggle.acknowledgeOriginals")
+                        Button("Choose Folder…") {
+                            pendingFolderAction = .fullBackup
+                            showFolderPicker = true
+                            showExportSheet = false
+                        }
+                        .disabled(!fullBackupAcknowledged || model.isBackupBusy)
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .accessibilityIdentifier("button.exportFullBackup")
+                    }
+                }
+                .padding()
+            }
+            .navigationTitle("Export / Back Up")
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { showExportSheet = false }
+                }
+            }
+        }
+    }
+
+    /// Confirmation sheet shown *after* a staged backup has fully validated.
+    /// Restoring always creates a new project — this sheet is the point
+    /// where the user sees exactly what will be created.
+    private var restoreSheet: some View {
+        NavigationStack {
+            List {
+                if let preview = model.restorePreview {
+                    Section("Restore as a NEW project") {
+                        LabeledContent("Project", value: preview.projectTitle)
+                        LabeledContent("Pieces", value: preview.pieceNames.joined(separator: ", "))
+                        LabeledContent("Patterns", value: "\(preview.documentCount)")
+                        Text("Existing projects are never overwritten or merged; everything below gets fresh IDs.")
+                            .font(.footnote)
+                    }
+                    Section {
+                        Button("Restore", role: .none) {
+                            model.confirmRestore()
+                        }
+                        .disabled(model.isBackupBusy)
+                        .accessibilityIdentifier("button.confirmRestore")
+                    }
+                }
+            }
+            .navigationTitle("Confirm Restore")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { model.cancelRestore() }
+                        .accessibilityIdentifier("button.cancelRestore")
                 }
             }
         }
