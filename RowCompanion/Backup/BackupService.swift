@@ -100,8 +100,7 @@ public final class BackupService {
     /// app-owned PDF copy under `originals/<relativePath>`. The caller
     /// asserted that the user saw `warnings(for: true)`.
     public func exportFullBackup(for projectID: UUID, to destinationDirectory: URL) throws {
-        let manifest = try repository.projectSnapshot(for: projectID)
-        var manifest = manifest
+        var manifest = try repository.projectSnapshot(for: projectID)
         manifest.includesOriginals = true
 
         // Fail before writing anything if any original is unreadable.
