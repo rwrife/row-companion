@@ -316,10 +316,11 @@ public enum BackupFormat {
             }
         }
 
-        // --- Staged files ----------------------------------------------------
-        var acceptedBytes: [UUID: Data] = [:]
+        // --- Path policy for the whole manifest ------------------------------
+        // Path validity + uniqueness are manifest-level checks and run
+        // BEFORE any per-file inspection, so a duplicated or hostile path is
+        // refused even when the referenced file is also missing.
         var declaredPaths: Set<String> = []
-        var totalBytes = 0
         for document in manifest.documents {
             let relative = document.relativePath
             guard isValidRelativePath(relative) else {
@@ -333,6 +334,13 @@ public enum BackupFormat {
             guard document.fileSize >= 0 else {
                 throw BackupError.sizeMismatch(entry: relative)
             }
+        }
+
+        // --- Staged files ----------------------------------------------------
+        var acceptedBytes: [UUID: Data] = [:]
+        var totalBytes = 0
+        for document in manifest.documents {
+            let relative = document.relativePath
 
             // Full backups store PDFs *flat* under originals/ by leaf name
             // (manifest relative paths are app-internal and need not mirror

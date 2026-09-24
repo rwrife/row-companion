@@ -129,7 +129,11 @@ final class BackupTests: XCTestCase {
         let (repo, projectID, _, _) = try makePopulatedRepository()
         let service = BackupService(repository: repo)
         let data = try service.exportProgress(for: projectID)
+        // Darwin JSONEncoder routes through NSJSONSerialization, which
+        // escapes forward slashes (\/). Unescape before the path-shape scan
+        // so this check sees identical shapes on every host.
         let json = try XCTUnwrap(String(data: data, encoding: .utf8))
+            .replacingOccurrences(of: "\\/", with: "/")
         XCTAssertFalse(json.contains("chart.pdf"), "export must never carry the user's filename")
         XCTAssertFalse(json.contains(tempDir.path), "no raw source paths in the export")
         XCTAssertFalse(json.contains("%PDF"), "no PDF bytes in a progress export")
@@ -364,11 +368,16 @@ final class BackupTests: XCTestCase {
         let service = BackupService(repository: repo)
         let bigSource = tempDir.appendingPathComponent("big-folder", isDirectory: true)
         try FileManager.default.createDirectory(at: bigSource, withIntermediateDirectories: true)
-        let fat = bigSource.appendingPathComponent("fat.bin")
-        FileManager.default.createFile(atPath: fat.path, contents: Data())
-        let handle = try FileHandle(forWritingTo: fat)
-        try handle.truncate(atOffset: UInt64(BackupFormat.maximumTotalBytes + 1))
-        try handle.close()
+        // The cap must be exceeded with *allocated* bytes: Darwin's
+        // fileSizeKey reports allocated disk usage, so a sparse (truncated)
+        // file measures ~0 there while Linux tmpfs charges full size.
+        // Dense chunks accumulate the same way on both hosts and the loop
+        // must refuse before copying anything.
+        let chunk = Data(count: 3 * 1024 * 1024)
+        let chunkCount = BackupFormat.maximumTotalBytes / chunk.count + 2
+        for index in 0..<chunkCount {
+            try chunk.write(to: bigSource.appendingPathComponent("blob-\(index).bin"))
+        }
         XCTAssertThrowsError(try service.stageRestore(from: bigSource)) { error in
             guard case BackupError.oversizedTotal? = error as? BackupError else { return XCTFail("got \(error)") }
         }
@@ -401,7 +410,7 @@ final class BackupTests: XCTestCase {
         // And a subsequent clean restore still works.
         let newID = try service.restore(from: backupDir)
         XCTAssertEqual(try repo.projects().count, 2)
-        XCTAssertNotEqual(try repo.pieces(in: projectID).first?.id, pieceID)
+        XCTAssertNotEqual(try repo.pieces(in: newID).first?.id, pieceID)
     }
 
     func testInjectedSaveFaultOnRestoreLeavesNoProjectAndNoOrphanBytes() throws {

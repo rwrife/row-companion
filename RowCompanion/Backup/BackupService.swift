@@ -192,17 +192,19 @@ public final class BackupService {
                 options: [.skipsHiddenFiles]
             )
             var total = 0
+            // Clamping at cap+1 (not at the cap) keeps a single over-cap
+            // item detectable while staying far away from overflow.
+            let oversizeProbe = Self.maximumStagedCopyBytes + 1
             for url in contents {
                 let isDirectory = (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false
                 let itemSize: Int
                 if isDirectory {
-                    // Unreadable trees count as the full cap (fail closed);
-                    // clamping keeps the accumulator far from overflow.
-                    itemSize = min((try? Self.directoryByteSize(url)) ?? Self.maximumStagedCopyBytes,
-                                   Self.maximumStagedCopyBytes)
+                    // Unreadable trees count as over-cap (fail closed).
+                    itemSize = min((try? Self.directoryByteSize(url)) ?? oversizeProbe,
+                                   oversizeProbe)
                 } else {
                     itemSize = min((try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0,
-                                   Self.maximumStagedCopyBytes)
+                                   oversizeProbe)
                 }
                 total += itemSize
                 guard total <= Self.maximumStagedCopyBytes else {
