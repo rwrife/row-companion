@@ -8,6 +8,9 @@ public enum WorkspaceError: Error, Equatable {
     case importFailed(PDFImportError)
     case rowActionFailed(RowRepositoryError)
     case rowDomainFailed(RowDomainError)
+    case backupFailed(BackupError)
+    case backupRepositoryFailed(RowRepository.BackupRepositoryError)
+    case deletionDenied
     case other(String)
 
     public var userMessage: String {
@@ -25,6 +28,9 @@ public enum WorkspaceError: Error, Equatable {
             case .repeatLengthOutOfRange: return "Repeat length must be 1 to 10000."
             case .pieceNotFound, .projectNotFound: return "That item no longer exists."
             }
+        case .backupFailed(let error): return error.userMessage
+        case .backupRepositoryFailed(let error): return error.userMessage
+        case .deletionDenied: return "Deletion was cancelled. Nothing was removed."
         case .other(let message): return message
         }
     }
@@ -55,9 +61,17 @@ public final class WorkspaceModel {
 
     /// True while an import is running so controls can disable.
     public private(set) var isImporting = false
+    /// True while an export/restore is running so controls can disable.
+    public private(set) var isBackupBusy = false
+    /// Non-destructive preview of a staged restore shown in the confirmation
+    /// sheet before anything becomes durable.
+    public private(set) var restorePreview: BackupService.RestorePreview?
+
+    public let backups: BackupService
 
     public init(repository: RowRepository) {
         self.repository = repository
+        self.backups = BackupService(repository: repository)
         reload()
         if let first = projects.first {
             select(project: first.id)
@@ -180,6 +194,148 @@ public final class WorkspaceModel {
         } catch let error as PDFImportError {
             lastError = .importFailed(error)
         } catch {
+            reportPersist(error)
+        }
+    }
+
+    // MARK: - Backup / restore / deletion (issue #5)
+    //
+    // These entry points move snapshots and validated bundles; like every
+    // other mutation here they have no path from layout or viewer events to
+    // `RowAction`, and a failed restore never touches existing projects.
+
+    /// Privacy/copyright copy the sheet must show for the chosen mode.
+    public var exportWarnings: [String] { BackupService.warnings(for: false) }
+    public var fullBackupWarnings: [String] { BackupService.warnings(for: true) }
+    public var deletionScopeNote: String { BackupService.deletionScopeNote }
+
+    /// Default progress export (no PDFs, no source paths) written as
+    /// `rowcompanion-progress.json` into the user-picked directory.
+    public func exportProgress(to directory: URL) {
+        guard let projectID = selectedProjectID else {
+            lastError = .noProjectSelected
+            return
+        }
+        isBackupBusy = true
+        defer { isBackupBusy = false }
+        do {
+            let data = try backups.exportProgress(for: projectID)
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            try data.write(to: directory.appendingPathComponent("rowcompanion-progress.json"))
+            statusMessage = "Progress exported (metadata only — no pattern files)."
+        } catch {
+            reportBackup(error)
+        }
+    }
+
+    /// Opt-in full folder backup into a user-picked directory. The UI must
+    /// have shown `fullBackupWarnings` first; this is the only call that
+    /// copies PDF bytes out of app storage.
+    public func exportFullBackup(to directory: URL) {
+        guard let projectID = selectedProjectID else {
+            lastError = .noProjectSelected
+            return
+        }
+        isBackupBusy = true
+        defer { isBackupBusy = false }
+        do {
+            try backups.exportFullBackup(for: projectID, to: directory)
+            statusMessage = "Full backup written — it contains copies of your patterns. Store it privately."
+        } catch {
+            reportBackup(error)
+        }
+    }
+
+    /// Stage a picked backup folder and surface a preview for confirmation.
+    /// Nothing durable happens here — `confirmRestore()` or `cancelRestore()`
+    /// follows. Re-staging replaces any earlier staged attempt.
+    public func prepareRestore(from directory: URL) {
+        isBackupBusy = true
+        defer { isBackupBusy = false }
+        do {
+            if let staged = stagedRestoreDirectory {
+                try? FileManager.default.removeItem(at: staged)
+                stagedRestoreDirectory = nil
+            }
+            let staged = try backups.stageRestore(from: directory)
+            do {
+                let manifest = try backups.readStagedManifest(stagedDirectory: staged)
+                _ = try backups.validate(stagedManifest: manifest, stagedDirectory: staged)
+                restorePreview = backups.preview(manifest: manifest)
+                stagedRestoreDirectory = staged
+            } catch {
+                // Hostile or unreadable archive: staging is removed, and no
+                // preview or durable change exists.
+                try? FileManager.default.removeItem(at: staged)
+                restorePreview = nil
+                reportBackup(error)
+            }
+        } catch {
+            restorePreview = nil
+            reportBackup(error)
+        }
+    }
+
+    public func cancelRestore() {
+        if let staged = stagedRestoreDirectory {
+            try? FileManager.default.removeItem(at: staged)
+        }
+        stagedRestoreDirectory = nil
+        restorePreview = nil
+    }
+
+    /// Insert the previously previewed/validated backup as a **new** project
+    /// with new IDs. If staging vanished in the meantime the attempt fails
+    /// cleanly with no durable change.
+    public func confirmRestore() {
+        guard let staged = stagedRestoreDirectory else {
+            lastError = .other("The staged backup is no longer available. Pick the backup again.")
+            return
+        }
+        isBackupBusy = true
+        defer { isBackupBusy = false }
+        do {
+            let newProjectID = try backups.restoreFromStaged(staged)
+            stagedRestoreDirectory = nil
+            restorePreview = nil
+            reload()
+            select(project: newProjectID)
+            statusMessage = "Backup restored as a new project. Existing projects were not changed."
+        } catch {
+            stagedRestoreDirectory = nil
+            restorePreview = nil
+            reportBackup(error)
+        }
+    }
+
+    /// Delete the selected project after explicit user confirmation.
+    public func deleteSelectedProject(confirmed: Bool) {
+        guard let projectID = selectedProjectID else {
+            lastError = .noProjectSelected
+            return
+        }
+        guard confirmed else {
+            lastError = .deletionDenied
+            return
+        }
+        do {
+            captureCurrentReference()
+            try repository.deleteProject(projectID, confirmed: true)
+            select(project: nil)
+            statusMessage = "Project and its app-owned files deleted. Your own exports and OS backups remain."
+        } catch {
+            reportBackup(error)
+        }
+    }
+
+    private var stagedRestoreDirectory: URL?
+
+    private func reportBackup(_ error: Error) {
+        if let backupError = error as? BackupError {
+            lastError = .backupFailed(backupError)
+        } else if let repoBackup = error as? RowRepository.BackupRepositoryError {
+            lastError = .backupRepositoryFailed(repoBackup)
+        } else {
             reportPersist(error)
         }
     }

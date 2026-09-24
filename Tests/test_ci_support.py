@@ -216,11 +216,36 @@ class CISupportTests(unittest.TestCase):
         self.assertEqual(report['caseCount'], 1)
         self.assertNotIn('result', report['testNodes'][0])
 
+    def test_resultless_leaf_reconciled_when_aggregate_forces_it(self):
+        # Real hosted failure (runs 35952796584 / 36005354055, main +
+        # PR #12): an intentionally skipped UI test (XCTSkip) puts both a
+        # 'Passed' and a 'Skipped' verdict on a resultless leaf's ancestor
+        # path, so inheritance is ambiguous — but the independently
+        # exported aggregate summary has exactly one verdict deficit
+        # matching the number of pending leaves, forcing attribution.
+        summary = {'totalTestCount': 2, 'passedTests': 1, 'failedTests': 0,
+                   'skippedTests': 1, 'result': 'Passed'}
+        tree = {'testNodes': [{'nodeType': 'Test Plan',
+                               'name': '/Users/runner/work/row-companion/RowCompanion.xctestplan',
+                               'result': 'Passed',
+                               'children': [
+                                   {'nodeType': 'Suite', 'name': 'Unit',
+                                    'result': 'Passed',
+                                    'children': [{'nodeType': 'Test Case', 'name': 'a',
+                                                  'result': 'Passed', 'duration': 0.4}]},
+                                   {'nodeType': 'Suite', 'name': 'UITests',
+                                    'result': 'Skipped',
+                                    'children': [{'nodeType': 'Test Case', 'name': 'capture'}]}]}]}
+        report = self.support.sanitize_report(tree, summary)
+        self.assertEqual(report['caseCount'], 2)
+        self.assertEqual(report['aggregate']['skippedTests'], 1)
+
     def test_resultless_leaf_without_unique_ancestors_fails_closed(self):
-        # An un-verdicted leaf under ancestors with conflicting verdicts
-        # cannot inherit unambiguously: the tree cannot attest it.
-        summary = {'totalTestCount': 3, 'passedTests': 2, 'failedTests': 1,
-                   'skippedTests': 0, 'result': 'Failed'}
+        # An un-verdicted leaf that the aggregate cannot force-attribute
+        # (two verdict deficits but only one pending leaf) cannot be
+        # attested by either source: the export fails closed.
+        summary = {'totalTestCount': 4, 'passedTests': 2, 'failedTests': 1,
+                   'skippedTests': 1, 'result': 'Failed'}
         tree = [{'nodeType': 'Suite', 'name': 'Ambiguous', 'result': 'Passed',
                  'children': [
                      {'nodeType': 'Test Case', 'name': 'a', 'result': 'Passed'},

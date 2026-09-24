@@ -168,34 +168,64 @@ def _walk_node(node, stats):
     return clean
 
 
-def _count_cases(node, tallies, ancestor_verdicts=()):
+def _count_cases(node, tallies, pending, ancestor_verdicts=()):
     if 'children' in node:
         verdicts = tuple(ancestor_verdicts)
         if 'result' in node:
             verdicts = verdicts + (node['result'],)
-        return sum(_count_cases(child, tallies, verdicts)
+        return sum(_count_cases(child, tallies, pending, verdicts)
                    for child in node['children'])
-    if 'result' not in node:
-        # Structural node or a test-case leaf published WITHOUT its own
-        # verdict (runs 35656419607 / 35661673966 / 35662926491, Xcode
-        # 26.0.1: the aggregate summary counted 57/57 Passed while the
-        # tree carried only 56 verdicts — the resultless leaf is one of
-        # those counted cases). Tally it only when every enclosing
-        # container shares exactly one verdict, so the inherited verdict
-        # is unambiguous; otherwise the tree cannot attest this leaf and
-        # the export fails closed.
-        unique = set(ancestor_verdicts)
-        if len(unique) != 1:
-            raise ValueError(
-                'Resultless xcresult leaf has no unique enclosing verdict: '
-                + json.dumps(sorted(unique)))
+    if 'result' in node:
+        # Shape-driven: every leaf with a verdict is a test case. A schema that
+        # produced only containers would yield zero cases and fail the
+        # aggregate-count match.
+        tallies[node['result']] += 1
+        return 1
+    # A leaf published WITHOUT its own verdict (runs 35656419607 /
+    # 35661673966 / 35662926491, Xcode 26.0.1: the aggregate summary counted
+    # 57/57 Passed while the tree carried only 56 verdicts — the resultless
+    # leaf is one of those counted cases). Tally it directly only when every
+    # enclosing container shares exactly one verdict, so the inherited
+    # verdict is unambiguous. Otherwise defer it to the aggregate reconcile
+    # in sanitize_report (runs 35952796584 / 36005354055: an intentionally
+    # skipped UI test puts both 'Passed' and 'Skipped' verdicts on the
+    # ancestor path of a resultless leaf; the tree cannot inherit, but the
+    # independent aggregate summary can still attest the leaf uniquely).
+    unique = set(ancestor_verdicts)
+    if len(unique) == 1:
         tallies[next(iter(unique))] += 1
         return 1
-    # Shape-driven: every leaf with a verdict is a test case. A schema that
-    # produced only containers would yield zero cases and fail the
-    # aggregate-count match.
-    tallies[node['result']] += 1
+    pending.append(sorted(unique))
     return 1
+
+
+def _reconcile_pending(tallies, pending, clean_summary):
+    """Attribute resultless leaves whose ancestors gave no unique verdict.
+
+    Succeeds only when the aggregate summary's per-verdict deficits name
+    exactly one verdict whose deficit equals the number of pending leaves;
+    any other distribution cannot be attested and fails closed. The summary
+    is the same independently exported aggregate that gates publication of
+    the whole report afterwards, so this adds no new information source and
+    no leak surface.
+    """
+    if not pending:
+        return
+    keys = {'Passed': 'passedTests', 'Failed': 'failedTests',
+            'Skipped': 'skippedTests'}
+    deficits = {v: clean_summary[k] - tallies[v] for v, k in keys.items()}
+    if any(d < 0 for d in deficits.values()):
+        raise ValueError('Resultless xcresult leaf has no unique enclosing '
+                         'verdict and aggregate deficits are inconsistent: '
+                         + json.dumps(deficits))
+    positive = [v for v, d in deficits.items() if d > 0]
+    if len(positive) != 1 or deficits[positive[0]] != len(pending):
+        raise ValueError('Resultless xcresult leaf has no unique enclosing '
+                         'verdict and cannot be reconciled with the '
+                         'aggregate summary: ' + json.dumps(
+                             {'pendingAncestors': pending,
+                              'deficits': deficits}))
+    tallies[positive[0]] += len(pending)
 
 
 def sanitize_report(payload, summary):
@@ -218,7 +248,10 @@ def sanitize_report(payload, summary):
     stats = {'redacted': 0, 'dropped': 0}
     nodes = [_walk_node(node, stats) for node in roots]
     tallies = {'Passed': 0, 'Failed': 0, 'Skipped': 0}
-    case_count = sum(_count_cases(node, tallies) for node in nodes)
+    pending: list = []
+    case_count = sum(_count_cases(node, tallies, pending) for node in nodes)
+    if pending:
+        _reconcile_pending(tallies, pending, clean_summary)
     if (case_count != clean_summary['totalTestCount']
             or tallies['Passed'] != clean_summary['passedTests']
             or tallies['Failed'] != clean_summary['failedTests']

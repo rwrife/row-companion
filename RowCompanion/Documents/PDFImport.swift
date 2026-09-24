@@ -41,18 +41,10 @@ public enum PDFImportError: Error, Equatable, Sendable {
     }
 }
 
-/// Non-UI formatting helper so error copy stays testable off-device.
-public enum ByteCount {
-    public enum Format {
-        public static func mebibytes(_ bytes: Int) -> String {
-            let mib = Double(bytes) / (1024 * 1024)
-            return mib >= 1
-                ? String(format: "%.1f MiB", mib)
-                : String(format: "%.0f KiB", Double(bytes) / 1024)
-        }
-    }
-}
-
+/// Non-UI byte formatting lives in `Domain/ByteCount.swift` (pure) so both
+/// the PDF import error copy and the backup error copy can use it without
+/// pulling PDFKit into the type-check surface.
+///
 /// Bounded PDF importer (PLAN.md "Import / export / ownership boundary").
 ///
 /// Pipeline, in order of increasing cost, with hard limits enforced as early
