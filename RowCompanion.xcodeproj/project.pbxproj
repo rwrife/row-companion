@@ -1,103 +1,563 @@
 // !$*UTF8*$!
 {
- archiveVersion = 1;
- classes = {};
- objectVersion = 56;
- objects = {
-  A00000000000000000000001 = {isa = PBXProject; attributes = {BuildIndependentTargetsInParallel = YES; LastUpgradeCheck = 2600; TargetAttributes = {B00000000000000000000002 = {TestTargetID = B00000000000000000000001;}; B00000000000000000000003 = {TestTargetID = B00000000000000000000001;};};}; buildConfigurationList = C00000000000000000000001; compatibilityVersion = "Xcode 14.0"; developmentRegion = en; hasScannedForEncodings = 0; knownRegions = (en, Base); mainGroup = D00000000000000000000001; productRefGroup = D00000000000000000000002; projectDirPath = ""; projectRoot = ""; targets = (B00000000000000000000001, B00000000000000000000002, B00000000000000000000003);};
-  D00000000000000000000001 = {isa = PBXGroup; children = (D00000000000000000000003, D00000000000000000000004, D00000000000000000000005, D00000000000000000000002); sourceTree = "<group>";};
-  D00000000000000000000002 = {isa = PBXGroup; children = (E00000000000000000000001, E00000000000000000000002, E00000000000000000000003); name = Products; sourceTree = "<group>";};
-  D00000000000000000000003 = {isa = PBXGroup; children = (E00000000000000000000004, E00000000000000000000005, D10000000000000000000001, D10000000000000000000002, D30000000000000000000001, D30000000000000000000002); path = RowCompanion; sourceTree = "<group>";};
-  D30000000000000000000001 = {isa = PBXGroup; children = (E30000000000000000000004); path = Documents; sourceTree = "<group>";};
-  D30000000000000000000002 = {isa = PBXGroup; children = (D30000000000000000000003); path = Features; sourceTree = "<group>";};
-  D30000000000000000000003 = {isa = PBXGroup; children = (E30000000000000000000005, E30000000000000000000006, E30000000000000000000007, E3000000000000000000000C); path = Workspace; sourceTree = "<group>";};
-  D10000000000000000000001 = {isa = PBXGroup; children = (E10000000000000000000001, E10000000000000000000002, E10000000000000000000003, E30000000000000000000001, E30000000000000000000002, E3000000000000000000000B); path = Domain; sourceTree = "<group>";};
-  E30000000000000000000001 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReferenceState.swift; sourceTree = "<group>";};
-  E30000000000000000000002 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentModels.swift; sourceTree = "<group>";};
-  E30000000000000000000003 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentRecords.swift; sourceTree = "<group>";};
-  E30000000000000000000004 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PDFImport.swift; sourceTree = "<group>";};
-  E30000000000000000000005 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceModel.swift; sourceTree = "<group>";};
-  E30000000000000000000006 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceLayout.swift; sourceTree = "<group>";};
-  E30000000000000000000007 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RowPDFView.swift; sourceTree = "<group>";};
-  E30000000000000000000008 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewportClampTests.swift; sourceTree = "<group>";};
-  E30000000000000000000009 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PDFImportTests.swift; sourceTree = "<group>";};
-  E3000000000000000000000A = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReferenceStateTests.swift; sourceTree = "<group>";};
-  E3000000000000000000000B = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PDFCoordinateSpace.swift; sourceTree = "<group>";};
-  E3000000000000000000000C = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceArrangement.swift; sourceTree = "<group>";};
-  E3000000000000000000000D = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceArrangementTests.swift; sourceTree = "<group>";};
-  D10000000000000000000002 = {isa = PBXGroup; children = (E10000000000000000000004, E10000000000000000000005, E10000000000000000000006, E30000000000000000000003); path = Persistence; sourceTree = "<group>";};
-  D00000000000000000000004 = {isa = PBXGroup; children = (E00000000000000000000006, E10000000000000000000007, E10000000000000000000008, E10000000000000000000009, E30000000000000000000008, E30000000000000000000009, E3000000000000000000000A, E3000000000000000000000D); path = RowCompanionTests; sourceTree = "<group>";};
-  D00000000000000000000005 = {isa = PBXGroup; children = (E00000000000000000000007); path = RowCompanionUITests; sourceTree = "<group>";};
-  E00000000000000000000001 = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = RowCompanion.app; sourceTree = BUILT_PRODUCTS_DIR;};
-  E00000000000000000000002 = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RowCompanionTests.xctest; sourceTree = BUILT_PRODUCTS_DIR;};
-  E00000000000000000000003 = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RowCompanionUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR;};
-  E00000000000000000000004 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RowCompanionApp.swift; sourceTree = "<group>";};
-  E00000000000000000000005 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>";};
-  E00000000000000000000006 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RowCompanionTests.swift; sourceTree = "<group>";};
-  E00000000000000000000007 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RowCompanionUITests.swift; sourceTree = "<group>";};
-  E10000000000000000000001 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RowArithmetic.swift; sourceTree = "<group>";};
-  E10000000000000000000002 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RowModels.swift; sourceTree = "<group>";};
-  E10000000000000000000003 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RowReducer.swift; sourceTree = "<group>";};
-  E10000000000000000000004 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RowRecords.swift; sourceTree = "<group>";};
-  E10000000000000000000005 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RowStoreFactory.swift; sourceTree = "<group>";};
-  E10000000000000000000006 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RowRepository.swift; sourceTree = "<group>";};
-  E10000000000000000000007 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RowArithmeticTests.swift; sourceTree = "<group>";};
-  E10000000000000000000008 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RowReducerTests.swift; sourceTree = "<group>";};
-  E10000000000000000000009 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RowRepositoryTests.swift; sourceTree = "<group>";};
-  F00000000000000000000001 = {isa = PBXBuildFile; fileRef = E00000000000000000000004;};
-  F00000000000000000000002 = {isa = PBXBuildFile; fileRef = E00000000000000000000005;};
-  F00000000000000000000003 = {isa = PBXBuildFile; fileRef = E00000000000000000000006;};
-  F00000000000000000000004 = {isa = PBXBuildFile; fileRef = E00000000000000000000007;};
-  F10000000000000000000001 = {isa = PBXBuildFile; fileRef = E10000000000000000000001;};
-  F10000000000000000000002 = {isa = PBXBuildFile; fileRef = E10000000000000000000002;};
-  F10000000000000000000003 = {isa = PBXBuildFile; fileRef = E10000000000000000000003;};
-  F10000000000000000000004 = {isa = PBXBuildFile; fileRef = E10000000000000000000004;};
-  F10000000000000000000005 = {isa = PBXBuildFile; fileRef = E10000000000000000000005;};
-  F10000000000000000000006 = {isa = PBXBuildFile; fileRef = E10000000000000000000006;};
-  F10000000000000000000007 = {isa = PBXBuildFile; fileRef = E10000000000000000000007;};
-  F10000000000000000000008 = {isa = PBXBuildFile; fileRef = E10000000000000000000008;};
-  F10000000000000000000009 = {isa = PBXBuildFile; fileRef = E10000000000000000000009;};
-  F30000000000000000000001 = {isa = PBXBuildFile; fileRef = E30000000000000000000001;};
-  F30000000000000000000002 = {isa = PBXBuildFile; fileRef = E30000000000000000000002;};
-  F30000000000000000000003 = {isa = PBXBuildFile; fileRef = E30000000000000000000003;};
-  F30000000000000000000004 = {isa = PBXBuildFile; fileRef = E30000000000000000000004;};
-  F30000000000000000000005 = {isa = PBXBuildFile; fileRef = E30000000000000000000005;};
-  F30000000000000000000006 = {isa = PBXBuildFile; fileRef = E30000000000000000000006;};
-  F30000000000000000000007 = {isa = PBXBuildFile; fileRef = E30000000000000000000007;};
-  F30000000000000000000008 = {isa = PBXBuildFile; fileRef = E30000000000000000000008;};
-  F30000000000000000000009 = {isa = PBXBuildFile; fileRef = E30000000000000000000009;};
-  F3000000000000000000000A = {isa = PBXBuildFile; fileRef = E3000000000000000000000A;};
-  F3000000000000000000000B = {isa = PBXBuildFile; fileRef = E3000000000000000000000B;};
-  F3000000000000000000000C = {isa = PBXBuildFile; fileRef = E3000000000000000000000C;};
-  F3000000000000000000000D = {isa = PBXBuildFile; fileRef = E3000000000000000000000D;};
-  B00000000000000000000001 = {isa = PBXNativeTarget; buildConfigurationList = C00000000000000000000002; buildPhases = (A10000000000000000000001, A10000000000000000000002, A10000000000000000000003); buildRules = (); dependencies = (); name = RowCompanion; productName = RowCompanion; productReference = E00000000000000000000001; productType = "com.apple.product-type.application";};
-  B00000000000000000000002 = {isa = PBXNativeTarget; buildConfigurationList = C00000000000000000000003; buildPhases = (A10000000000000000000004, A10000000000000000000005, A10000000000000000000006); buildRules = (); dependencies = (A20000000000000000000001); name = RowCompanionTests; productName = RowCompanionTests; productReference = E00000000000000000000002; productType = "com.apple.product-type.bundle.unit-test";};
-  B00000000000000000000003 = {isa = PBXNativeTarget; buildConfigurationList = C00000000000000000000004; buildPhases = (A10000000000000000000007, A10000000000000000000008, A10000000000000000000009); buildRules = (); dependencies = (A20000000000000000000002); name = RowCompanionUITests; productName = RowCompanionUITests; productReference = E00000000000000000000003; productType = "com.apple.product-type.bundle.ui-testing";};
-  A10000000000000000000001 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (F00000000000000000000001, F00000000000000000000002, F10000000000000000000001, F10000000000000000000002, F10000000000000000000003, F10000000000000000000004, F10000000000000000000005, F10000000000000000000006, F30000000000000000000001, F30000000000000000000002, F30000000000000000000003, F30000000000000000000004, F30000000000000000000005, F30000000000000000000006, F30000000000000000000007, F3000000000000000000000B, F3000000000000000000000C); runOnlyForDeploymentPostprocessing = 0;};
-  A10000000000000000000002 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0;};
-  A10000000000000000000003 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0;};
-  A10000000000000000000004 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (F00000000000000000000003, F10000000000000000000007, F10000000000000000000008, F10000000000000000000009, F30000000000000000000008, F30000000000000000000009, F3000000000000000000000A, F3000000000000000000000D); runOnlyForDeploymentPostprocessing = 0;};
-  A10000000000000000000005 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0;};
-  A10000000000000000000006 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0;};
-  A10000000000000000000007 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (F00000000000000000000004); runOnlyForDeploymentPostprocessing = 0;};
-  A10000000000000000000008 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0;};
-  A10000000000000000000009 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0;};
-  A20000000000000000000001 = {isa = PBXTargetDependency; target = B00000000000000000000001; targetProxy = A30000000000000000000001;};
-  A20000000000000000000002 = {isa = PBXTargetDependency; target = B00000000000000000000001; targetProxy = A30000000000000000000002;};
-  A30000000000000000000001 = {isa = PBXContainerItemProxy; containerPortal = A00000000000000000000001; proxyType = 1; remoteGlobalIDString = B00000000000000000000001; remoteInfo = RowCompanion;};
-  A30000000000000000000002 = {isa = PBXContainerItemProxy; containerPortal = A00000000000000000000001; proxyType = 1; remoteGlobalIDString = B00000000000000000000001; remoteInfo = RowCompanion;};
-  C00000000000000000000001 = {isa = XCConfigurationList; buildConfigurations = (C10000000000000000000001, C10000000000000000000002); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release;};
-  C00000000000000000000002 = {isa = XCConfigurationList; buildConfigurations = (C10000000000000000000003, C10000000000000000000004); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release;};
-  C00000000000000000000003 = {isa = XCConfigurationList; buildConfigurations = (C10000000000000000000005, C10000000000000000000006); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release;};
-  C00000000000000000000004 = {isa = XCConfigurationList; buildConfigurations = (C10000000000000000000007, C10000000000000000000008); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release;};
-  C10000000000000000000001 = {isa = XCBuildConfiguration; name = Debug; buildSettings = {CLANG_ENABLE_MODULES = YES; SDKROOT = iphoneos; IPHONEOS_DEPLOYMENT_TARGET = 26.0; SWIFT_VERSION = 6.0; SWIFT_STRICT_CONCURRENCY = complete; SWIFT_OPTIMIZATION_LEVEL = "-Onone"; SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)"; ENABLE_TESTABILITY = YES; DEBUG_INFORMATION_FORMAT = dwarf;};};
-  C10000000000000000000002 = {isa = XCBuildConfiguration; name = Release; buildSettings = {CLANG_ENABLE_MODULES = YES; SDKROOT = iphoneos; IPHONEOS_DEPLOYMENT_TARGET = 26.0; SWIFT_VERSION = 6.0; SWIFT_STRICT_CONCURRENCY = complete; SWIFT_COMPILATION_MODE = wholemodule; SWIFT_OPTIMIZATION_LEVEL = "-O"; DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";};};
-  C10000000000000000000003 = {isa = XCBuildConfiguration; name = Debug; buildSettings = {PRODUCT_BUNDLE_IDENTIFIER = com.infinityball.rowcompanion; PRODUCT_NAME = "$(TARGET_NAME)"; GENERATE_INFOPLIST_FILE = YES; INFOPLIST_KEY_CFBundleDisplayName = "Row Companion"; INFOPLIST_KEY_UILaunchScreen_Generation = YES; INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES; TARGETED_DEVICE_FAMILY = "1,2"; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; SUPPORTS_MACCATALYST = NO; MARKETING_VERSION = 0.1.0; CURRENT_PROJECT_VERSION = 1;};};
-  C10000000000000000000004 = {isa = XCBuildConfiguration; name = Release; buildSettings = {PRODUCT_BUNDLE_IDENTIFIER = com.infinityball.rowcompanion; PRODUCT_NAME = "$(TARGET_NAME)"; GENERATE_INFOPLIST_FILE = YES; INFOPLIST_KEY_CFBundleDisplayName = "Row Companion"; INFOPLIST_KEY_UILaunchScreen_Generation = YES; INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES; TARGETED_DEVICE_FAMILY = "1,2"; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; SUPPORTS_MACCATALYST = NO; MARKETING_VERSION = 0.1.0; CURRENT_PROJECT_VERSION = 1;};};
-  C10000000000000000000005 = {isa = XCBuildConfiguration; name = Debug; buildSettings = {PRODUCT_BUNDLE_IDENTIFIER = com.infinityball.rowcompanion.tests; PRODUCT_NAME = "$(TARGET_NAME)"; GENERATE_INFOPLIST_FILE = YES; TARGETED_DEVICE_FAMILY = "1,2"; TEST_HOST = "$(BUILT_PRODUCTS_DIR)/RowCompanion.app/RowCompanion"; BUNDLE_LOADER = "$(TEST_HOST)";};};
-  C10000000000000000000006 = {isa = XCBuildConfiguration; name = Release; buildSettings = {PRODUCT_BUNDLE_IDENTIFIER = com.infinityball.rowcompanion.tests; PRODUCT_NAME = "$(TARGET_NAME)"; GENERATE_INFOPLIST_FILE = YES; TARGETED_DEVICE_FAMILY = "1,2"; TEST_HOST = "$(BUILT_PRODUCTS_DIR)/RowCompanion.app/RowCompanion"; BUNDLE_LOADER = "$(TEST_HOST)";};};
-  C10000000000000000000007 = {isa = XCBuildConfiguration; name = Debug; buildSettings = {PRODUCT_BUNDLE_IDENTIFIER = com.infinityball.rowcompanion.uitests; PRODUCT_NAME = "$(TARGET_NAME)"; GENERATE_INFOPLIST_FILE = YES; TARGETED_DEVICE_FAMILY = "1,2"; TEST_TARGET_NAME = RowCompanion;};};
-  C10000000000000000000008 = {isa = XCBuildConfiguration; name = Release; buildSettings = {PRODUCT_BUNDLE_IDENTIFIER = com.infinityball.rowcompanion.uitests; PRODUCT_NAME = "$(TARGET_NAME)"; GENERATE_INFOPLIST_FILE = YES; TARGETED_DEVICE_FAMILY = "1,2"; TEST_TARGET_NAME = RowCompanion;};};
- };
- rootObject = A00000000000000000000001;
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		F00000000000000000000001 /* RowCompanionApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = E00000000000000000000004 /* RowCompanionApp.swift */; };
+		F00000000000000000000002 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E00000000000000000000005 /* ContentView.swift */; };
+		F00000000000000000000003 /* RowCompanionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E00000000000000000000006 /* RowCompanionTests.swift */; };
+		F00000000000000000000004 /* RowCompanionUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E00000000000000000000007 /* RowCompanionUITests.swift */; };
+		F10000000000000000000001 /* RowArithmetic.swift in Sources */ = {isa = PBXBuildFile; fileRef = E10000000000000000000001 /* RowArithmetic.swift */; };
+		F10000000000000000000002 /* RowModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = E10000000000000000000002 /* RowModels.swift */; };
+		F10000000000000000000003 /* RowReducer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E10000000000000000000003 /* RowReducer.swift */; };
+		F10000000000000000000004 /* RowRecords.swift in Sources */ = {isa = PBXBuildFile; fileRef = E10000000000000000000004 /* RowRecords.swift */; };
+		F10000000000000000000005 /* RowStoreFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = E10000000000000000000005 /* RowStoreFactory.swift */; };
+		F10000000000000000000006 /* RowRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = E10000000000000000000006 /* RowRepository.swift */; };
+		F10000000000000000000007 /* RowArithmeticTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E10000000000000000000007 /* RowArithmeticTests.swift */; };
+		F10000000000000000000008 /* RowReducerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E10000000000000000000008 /* RowReducerTests.swift */; };
+		F10000000000000000000009 /* RowRepositoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E10000000000000000000009 /* RowRepositoryTests.swift */; };
+		F30000000000000000000001 /* ReferenceState.swift in Sources */ = {isa = PBXBuildFile; fileRef = E30000000000000000000001 /* ReferenceState.swift */; };
+		F30000000000000000000002 /* DocumentModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = E30000000000000000000002 /* DocumentModels.swift */; };
+		F30000000000000000000003 /* DocumentRecords.swift in Sources */ = {isa = PBXBuildFile; fileRef = E30000000000000000000003 /* DocumentRecords.swift */; };
+		F30000000000000000000004 /* PDFImport.swift in Sources */ = {isa = PBXBuildFile; fileRef = E30000000000000000000004 /* PDFImport.swift */; };
+		F30000000000000000000005 /* WorkspaceModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E30000000000000000000005 /* WorkspaceModel.swift */; };
+		F30000000000000000000006 /* WorkspaceLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = E30000000000000000000006 /* WorkspaceLayout.swift */; };
+		F30000000000000000000007 /* RowPDFView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E30000000000000000000007 /* RowPDFView.swift */; };
+		F30000000000000000000008 /* ViewportClampTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E30000000000000000000008 /* ViewportClampTests.swift */; };
+		F30000000000000000000009 /* PDFImportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E30000000000000000000009 /* PDFImportTests.swift */; };
+		F3000000000000000000000A /* ReferenceStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3000000000000000000000A /* ReferenceStateTests.swift */; };
+		F3000000000000000000000B /* PDFCoordinateSpace.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3000000000000000000000B /* PDFCoordinateSpace.swift */; };
+		F3000000000000000000000C /* WorkspaceArrangement.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3000000000000000000000C /* WorkspaceArrangement.swift */; };
+		F3000000000000000000000D /* WorkspaceArrangementTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3000000000000000000000D /* WorkspaceArrangementTests.swift */; };
+		F90000000000000000000001 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E90000000000000000000001 /* Assets.xcassets */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		A30000000000000000000001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A00000000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = B00000000000000000000001;
+			remoteInfo = RowCompanion;
+		};
+		A30000000000000000000002 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A00000000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = B00000000000000000000001;
+			remoteInfo = RowCompanion;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		E00000000000000000000001 /* RowCompanion.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = RowCompanion.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		E00000000000000000000002 /* RowCompanionTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RowCompanionTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		E00000000000000000000003 /* RowCompanionUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RowCompanionUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		E00000000000000000000004 /* RowCompanionApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RowCompanionApp.swift; sourceTree = "<group>"; };
+		E00000000000000000000005 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		E00000000000000000000006 /* RowCompanionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RowCompanionTests.swift; sourceTree = "<group>"; };
+		E00000000000000000000007 /* RowCompanionUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RowCompanionUITests.swift; sourceTree = "<group>"; };
+		E10000000000000000000001 /* RowArithmetic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RowArithmetic.swift; sourceTree = "<group>"; };
+		E10000000000000000000002 /* RowModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RowModels.swift; sourceTree = "<group>"; };
+		E10000000000000000000003 /* RowReducer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RowReducer.swift; sourceTree = "<group>"; };
+		E10000000000000000000004 /* RowRecords.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RowRecords.swift; sourceTree = "<group>"; };
+		E10000000000000000000005 /* RowStoreFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RowStoreFactory.swift; sourceTree = "<group>"; };
+		E10000000000000000000006 /* RowRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RowRepository.swift; sourceTree = "<group>"; };
+		E10000000000000000000007 /* RowArithmeticTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RowArithmeticTests.swift; sourceTree = "<group>"; };
+		E10000000000000000000008 /* RowReducerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RowReducerTests.swift; sourceTree = "<group>"; };
+		E10000000000000000000009 /* RowRepositoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RowRepositoryTests.swift; sourceTree = "<group>"; };
+		E30000000000000000000001 /* ReferenceState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReferenceState.swift; sourceTree = "<group>"; };
+		E30000000000000000000002 /* DocumentModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentModels.swift; sourceTree = "<group>"; };
+		E30000000000000000000003 /* DocumentRecords.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentRecords.swift; sourceTree = "<group>"; };
+		E30000000000000000000004 /* PDFImport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PDFImport.swift; sourceTree = "<group>"; };
+		E30000000000000000000005 /* WorkspaceModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceModel.swift; sourceTree = "<group>"; };
+		E30000000000000000000006 /* WorkspaceLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceLayout.swift; sourceTree = "<group>"; };
+		E30000000000000000000007 /* RowPDFView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RowPDFView.swift; sourceTree = "<group>"; };
+		E30000000000000000000008 /* ViewportClampTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewportClampTests.swift; sourceTree = "<group>"; };
+		E30000000000000000000009 /* PDFImportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PDFImportTests.swift; sourceTree = "<group>"; };
+		E3000000000000000000000A /* ReferenceStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReferenceStateTests.swift; sourceTree = "<group>"; };
+		E3000000000000000000000B /* PDFCoordinateSpace.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PDFCoordinateSpace.swift; sourceTree = "<group>"; };
+		E3000000000000000000000C /* WorkspaceArrangement.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceArrangement.swift; sourceTree = "<group>"; };
+		E3000000000000000000000D /* WorkspaceArrangementTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceArrangementTests.swift; sourceTree = "<group>"; };
+		E90000000000000000000001 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		A10000000000000000000002 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A10000000000000000000005 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A10000000000000000000008 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		D00000000000000000000001 = {
+			isa = PBXGroup;
+			children = (
+				D00000000000000000000003 /* RowCompanion */,
+				D00000000000000000000004 /* RowCompanionTests */,
+				D00000000000000000000005 /* RowCompanionUITests */,
+				D00000000000000000000002 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		D00000000000000000000002 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				E00000000000000000000001 /* RowCompanion.app */,
+				E00000000000000000000002 /* RowCompanionTests.xctest */,
+				E00000000000000000000003 /* RowCompanionUITests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		D00000000000000000000003 /* RowCompanion */ = {
+			isa = PBXGroup;
+			children = (
+				E90000000000000000000001 /* Assets.xcassets */,
+				E00000000000000000000004 /* RowCompanionApp.swift */,
+				E00000000000000000000005 /* ContentView.swift */,
+				D10000000000000000000001 /* Domain */,
+				D10000000000000000000002 /* Persistence */,
+				D30000000000000000000001 /* Documents */,
+				D30000000000000000000002 /* Features */,
+			);
+			path = RowCompanion;
+			sourceTree = "<group>";
+		};
+		D00000000000000000000004 /* RowCompanionTests */ = {
+			isa = PBXGroup;
+			children = (
+				E00000000000000000000006 /* RowCompanionTests.swift */,
+				E10000000000000000000007 /* RowArithmeticTests.swift */,
+				E10000000000000000000008 /* RowReducerTests.swift */,
+				E10000000000000000000009 /* RowRepositoryTests.swift */,
+				E30000000000000000000008 /* ViewportClampTests.swift */,
+				E30000000000000000000009 /* PDFImportTests.swift */,
+				E3000000000000000000000A /* ReferenceStateTests.swift */,
+				E3000000000000000000000D /* WorkspaceArrangementTests.swift */,
+			);
+			path = RowCompanionTests;
+			sourceTree = "<group>";
+		};
+		D00000000000000000000005 /* RowCompanionUITests */ = {
+			isa = PBXGroup;
+			children = (
+				E00000000000000000000007 /* RowCompanionUITests.swift */,
+			);
+			path = RowCompanionUITests;
+			sourceTree = "<group>";
+		};
+		D10000000000000000000001 /* Domain */ = {
+			isa = PBXGroup;
+			children = (
+				E10000000000000000000001 /* RowArithmetic.swift */,
+				E10000000000000000000002 /* RowModels.swift */,
+				E10000000000000000000003 /* RowReducer.swift */,
+				E30000000000000000000001 /* ReferenceState.swift */,
+				E30000000000000000000002 /* DocumentModels.swift */,
+				E3000000000000000000000B /* PDFCoordinateSpace.swift */,
+			);
+			path = Domain;
+			sourceTree = "<group>";
+		};
+		D10000000000000000000002 /* Persistence */ = {
+			isa = PBXGroup;
+			children = (
+				E10000000000000000000004 /* RowRecords.swift */,
+				E10000000000000000000005 /* RowStoreFactory.swift */,
+				E10000000000000000000006 /* RowRepository.swift */,
+				E30000000000000000000003 /* DocumentRecords.swift */,
+			);
+			path = Persistence;
+			sourceTree = "<group>";
+		};
+		D30000000000000000000001 /* Documents */ = {
+			isa = PBXGroup;
+			children = (
+				E30000000000000000000004 /* PDFImport.swift */,
+			);
+			path = Documents;
+			sourceTree = "<group>";
+		};
+		D30000000000000000000002 /* Features */ = {
+			isa = PBXGroup;
+			children = (
+				D30000000000000000000003 /* Workspace */,
+			);
+			path = Features;
+			sourceTree = "<group>";
+		};
+		D30000000000000000000003 /* Workspace */ = {
+			isa = PBXGroup;
+			children = (
+				E30000000000000000000005 /* WorkspaceModel.swift */,
+				E30000000000000000000006 /* WorkspaceLayout.swift */,
+				E30000000000000000000007 /* RowPDFView.swift */,
+				E3000000000000000000000C /* WorkspaceArrangement.swift */,
+			);
+			path = Workspace;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		B00000000000000000000001 /* RowCompanion */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C00000000000000000000002 /* Build configuration list for PBXNativeTarget "RowCompanion" */;
+			buildPhases = (
+				A10000000000000000000001 /* Sources */,
+				A10000000000000000000002 /* Frameworks */,
+				A10000000000000000000003 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = RowCompanion;
+			productName = RowCompanion;
+			productReference = E00000000000000000000001 /* RowCompanion.app */;
+			productType = "com.apple.product-type.application";
+		};
+		B00000000000000000000002 /* RowCompanionTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C00000000000000000000003 /* Build configuration list for PBXNativeTarget "RowCompanionTests" */;
+			buildPhases = (
+				A10000000000000000000004 /* Sources */,
+				A10000000000000000000005 /* Frameworks */,
+				A10000000000000000000006 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				A20000000000000000000001 /* PBXTargetDependency */,
+			);
+			name = RowCompanionTests;
+			productName = RowCompanionTests;
+			productReference = E00000000000000000000002 /* RowCompanionTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		B00000000000000000000003 /* RowCompanionUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C00000000000000000000004 /* Build configuration list for PBXNativeTarget "RowCompanionUITests" */;
+			buildPhases = (
+				A10000000000000000000007 /* Sources */,
+				A10000000000000000000008 /* Frameworks */,
+				A10000000000000000000009 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				A20000000000000000000002 /* PBXTargetDependency */,
+			);
+			name = RowCompanionUITests;
+			productName = RowCompanionUITests;
+			productReference = E00000000000000000000003 /* RowCompanionUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		A00000000000000000000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 2600;
+				TargetAttributes = {
+					B00000000000000000000002 = {
+						TestTargetID = B00000000000000000000001;
+					};
+					B00000000000000000000003 = {
+						TestTargetID = B00000000000000000000001;
+					};
+				};
+			};
+			buildConfigurationList = C00000000000000000000001 /* Build configuration list for PBXProject "RowCompanion" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = D00000000000000000000001;
+			productRefGroup = D00000000000000000000002 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				B00000000000000000000001 /* RowCompanion */,
+				B00000000000000000000002 /* RowCompanionTests */,
+				B00000000000000000000003 /* RowCompanionUITests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		A10000000000000000000003 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F90000000000000000000001 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A10000000000000000000006 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A10000000000000000000009 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		A10000000000000000000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F00000000000000000000001 /* RowCompanionApp.swift in Sources */,
+				F00000000000000000000002 /* ContentView.swift in Sources */,
+				F10000000000000000000001 /* RowArithmetic.swift in Sources */,
+				F10000000000000000000002 /* RowModels.swift in Sources */,
+				F10000000000000000000003 /* RowReducer.swift in Sources */,
+				F10000000000000000000004 /* RowRecords.swift in Sources */,
+				F10000000000000000000005 /* RowStoreFactory.swift in Sources */,
+				F10000000000000000000006 /* RowRepository.swift in Sources */,
+				F30000000000000000000001 /* ReferenceState.swift in Sources */,
+				F30000000000000000000002 /* DocumentModels.swift in Sources */,
+				F30000000000000000000003 /* DocumentRecords.swift in Sources */,
+				F30000000000000000000004 /* PDFImport.swift in Sources */,
+				F30000000000000000000005 /* WorkspaceModel.swift in Sources */,
+				F30000000000000000000006 /* WorkspaceLayout.swift in Sources */,
+				F30000000000000000000007 /* RowPDFView.swift in Sources */,
+				F3000000000000000000000B /* PDFCoordinateSpace.swift in Sources */,
+				F3000000000000000000000C /* WorkspaceArrangement.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A10000000000000000000004 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F00000000000000000000003 /* RowCompanionTests.swift in Sources */,
+				F10000000000000000000007 /* RowArithmeticTests.swift in Sources */,
+				F10000000000000000000008 /* RowReducerTests.swift in Sources */,
+				F10000000000000000000009 /* RowRepositoryTests.swift in Sources */,
+				F30000000000000000000008 /* ViewportClampTests.swift in Sources */,
+				F30000000000000000000009 /* PDFImportTests.swift in Sources */,
+				F3000000000000000000000A /* ReferenceStateTests.swift in Sources */,
+				F3000000000000000000000D /* WorkspaceArrangementTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A10000000000000000000007 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F00000000000000000000004 /* RowCompanionUITests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		A20000000000000000000001 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = B00000000000000000000001 /* RowCompanion */;
+			targetProxy = A30000000000000000000001 /* PBXContainerItemProxy */;
+		};
+		A20000000000000000000002 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = B00000000000000000000001 /* RowCompanion */;
+			targetProxy = A30000000000000000000002 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		C10000000000000000000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_MODULES = YES;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_TESTABILITY = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		C10000000000000000000002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_MODULES = YES;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+		C10000000000000000000003 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 2ES87W257J;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "Row Companion";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.lifestyle";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.infinityball.rowcompanion;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		C10000000000000000000004 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 2ES87W257J;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "Row Companion";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.lifestyle";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.infinityball.rowcompanion;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+		C10000000000000000000005 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = com.infinityball.rowcompanion.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/RowCompanion.app/RowCompanion";
+			};
+			name = Debug;
+		};
+		C10000000000000000000006 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = com.infinityball.rowcompanion.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/RowCompanion.app/RowCompanion";
+			};
+			name = Release;
+		};
+		C10000000000000000000007 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				GENERATE_INFOPLIST_FILE = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = com.infinityball.rowcompanion.uitests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = RowCompanion;
+			};
+			name = Debug;
+		};
+		C10000000000000000000008 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				GENERATE_INFOPLIST_FILE = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = com.infinityball.rowcompanion.uitests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = RowCompanion;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		C00000000000000000000001 /* Build configuration list for PBXProject "RowCompanion" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C10000000000000000000001 /* Debug */,
+				C10000000000000000000002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		C00000000000000000000002 /* Build configuration list for PBXNativeTarget "RowCompanion" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C10000000000000000000003 /* Debug */,
+				C10000000000000000000004 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		C00000000000000000000003 /* Build configuration list for PBXNativeTarget "RowCompanionTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C10000000000000000000005 /* Debug */,
+				C10000000000000000000006 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		C00000000000000000000004 /* Build configuration list for PBXNativeTarget "RowCompanionUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C10000000000000000000007 /* Debug */,
+				C10000000000000000000008 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = A00000000000000000000001 /* Project object */;
 }

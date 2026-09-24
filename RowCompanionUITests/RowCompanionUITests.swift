@@ -47,6 +47,39 @@ final class RowCompanionUITests: XCTestCase {
         app.buttons["button.addPiece"].tap()
     }
 
+    /// Run explicitly for store assets; attachments are real simulator pixels.
+    func testCaptureAppStoreScreenshots() throws {
+        guard ProcessInfo.processInfo.environment["RC_CAPTURE_SCREENSHOTS"] == "1" else {
+            throw XCTSkip("Marketing capture is opt-in; use Scripts/capture_app_store.sh")
+        }
+        app.launchArguments = ["-rc-app-store"]
+        app.launch()
+        XCTAssertTrue(app.staticTexts["row.completed"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.staticTexts["row.completed"].label.contains("42"))
+        func capture(_ name: String) {
+            // Let PDFKit finish its initial page layout before capture.
+            Thread.sleep(forTimeInterval: 2)
+            let attachment = XCTAttachment(screenshot: app.screenshot())
+            attachment.name = name
+            attachment.lifetime = .keepAlways
+            add(attachment)
+        }
+        capture("01-pattern-and-progress")
+        app.scrollViews.firstMatch.swipeUp()
+        capture("02-reading-guide-and-notes")
+        app.buttons["control.piece"].tap()
+        XCTAssertTrue(app.buttons["Left sleeve"].waitForExistence(timeout: 5))
+        app.buttons["Left sleeve"].tap()
+        XCTAssertTrue(app.staticTexts["row.completed"].label.contains("20"))
+        // Start the piece at the top of its controls for a consistent capture.
+        app.terminate()
+        app.launchArguments = ["-rc-app-store", "-rc-app-store-sleeve"]
+        app.launch()
+        XCTAssertTrue(app.staticTexts["row.completed"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.buttons["control.completeRow"].isHittable)
+        capture("03-independent-pieces")
+    }
+
     func testCreateCompleteUndoRelaunchRetainsCount() {
         createProject("UI Scarf", piece: "Front", repeatLength: "8")
 

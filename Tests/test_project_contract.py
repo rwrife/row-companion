@@ -9,7 +9,8 @@ ROOT = Path(__file__).resolve().parents[1]
 class ProjectContractTests(unittest.TestCase):
     def test_project_identifiers_are_defined_and_scheme_targets_exist(self):
         project = (ROOT / 'RowCompanion.xcodeproj/project.pbxproj').read_text()
-        definitions = re.findall(r'^  ([A-F0-9]{24}) =', project, re.MULTILINE)
+        # Accept both the compact project and Xcode's tabbed/commented format.
+        definitions = re.findall(r'^[ \t]{2}([A-F0-9]{24})(?: /\*.*?\*/)? =', project, re.MULTILINE)
         self.assertEqual(len(definitions), len(set(definitions)))
         identifiers = set(re.findall(r'\b[A-F0-9]{24}\b', project))
         self.assertEqual(identifiers, set(definitions))

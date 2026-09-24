@@ -10,7 +10,18 @@ struct RowCompanionApp: App {
 
     init() {
         do {
-            let url = RowStoreFactory.defaultStoreURL()
+            var url = RowStoreFactory.defaultStoreURL()
+            #if DEBUG && targetEnvironment(simulator)
+            // Marketing fixtures use a separate simulator-only store. Real
+            // projects and the release build never enter this path.
+            let screenshots = CommandLine.arguments.contains("-rc-app-store")
+            if screenshots {
+                url = url.deletingLastPathComponent().deletingLastPathComponent()
+                    .appendingPathComponent("RowCompanionScreenshots")
+                    .appendingPathComponent("screenshots.sqlite")
+                try? FileManager.default.removeItem(at: url.deletingLastPathComponent())
+            }
+            #endif
             // UI-test isolation: an explicit launch argument wipes the
             // app-private workspace before opening, so journeys start from a
             // clean store. Never triggered by normal app launches.
@@ -19,7 +30,11 @@ struct RowCompanionApp: App {
                 try? FileManager.default.removeItem(at: base)
             }
             let repository = try RowRepository.openOrCreate(storeURL: url)
-            model = .success(WorkspaceModel(repository: repository))
+            let workspace = WorkspaceModel(repository: repository)
+            #if DEBUG && targetEnvironment(simulator)
+            if screenshots { try seedAppStoreWorkspace(workspace) }
+            #endif
+            model = .success(workspace)
         } catch {
             model = .failure(error)
         }
@@ -58,3 +73,60 @@ struct StartupFailureView: View {
         .padding()
     }
 }
+
+#if DEBUG && targetEnvironment(simulator)
+import UIKit
+
+/// Original sample content for repeatable captures of the real interface.
+@MainActor
+private func seedAppStoreWorkspace(_ workspace: WorkspaceModel) throws {
+    workspace.createProject(title: "Weekend cardigan")
+    workspace.addPiece(name: "Back panel", repeatLength: 8)
+    let back = workspace.selectedPieceID
+    for _ in 0..<42 { workspace.completeRow() }
+    workspace.setNotes("Moss stitch panel · 5 mm needles\nWork 8-row repeats to desired length.\nPlace a marker at the beginning of each repeat.")
+
+    let page = CGRect(x: 0, y: 0, width: 420, height: 360)
+    let pdf = UIGraphicsPDFRenderer(bounds: page).pdfData { context in
+        context.beginPage()
+        UIColor(red: 0.98, green: 0.96, blue: 0.93, alpha: 1).setFill()
+        context.cgContext.fill(page)
+        func text(_ value: String, _ x: CGFloat, _ y: CGFloat, _ size: CGFloat, bold: Bool = false) {
+            (value as NSString).draw(at: CGPoint(x: x, y: y), withAttributes: [
+                .font: bold ? UIFont.boldSystemFont(ofSize: size) : UIFont.systemFont(ofSize: size),
+                .foregroundColor: UIColor(red: 0.19, green: 0.13, blue: 0.28, alpha: 1)
+            ])
+        }
+        text("WEEKEND CARDIGAN", 28, 20, 12, bold: true)
+        text("Moss stitch study", 28, 42, 27, bold: true)
+        text("8-row repeat • work flat", 28, 80, 13)
+        let cell: CGFloat = 23
+        for row in 0..<8 {
+            text(String(8 - row), 28, 113 + CGFloat(row) * cell, 12)
+            for column in 0..<14 {
+                let rect = CGRect(x: 49 + CGFloat(column) * cell, y: 108 + CGFloat(row) * cell, width: cell, height: cell)
+                let purl = (column + (row / 2)) % 2 == 0
+                (purl ? UIColor(red: 0.89, green: 0.83, blue: 0.93, alpha: 1) : .white).setFill()
+                context.cgContext.fill(rect)
+                UIColor(white: 0.65, alpha: 1).setStroke()
+                context.cgContext.setLineWidth(0.5)
+                context.cgContext.stroke(rect)
+                if purl { text("•", rect.minX + 8, rect.minY + 2, 15) }
+            }
+        }
+        text("□ Knit on RS / purl on WS    • Purl on RS / knit on WS", 28, 306, 12)
+    }
+    let fixture = FileManager.default.temporaryDirectory.appendingPathComponent("row-companion-sample.pdf")
+    try pdf.write(to: fixture)
+    defer { try? FileManager.default.removeItem(at: fixture) }
+    workspace.importPDF(from: fixture)
+    workspace.setGuide(y: 0.70)
+    workspace.addPiece(name: "Left sleeve", repeatLength: 8)
+    for _ in 0..<20 { workspace.completeRow() }
+    workspace.setNotes("5 mm needles · moss stitch\nCompare with the right sleeve before shaping.\nKeep both sleeves at the same length.")
+    workspace.viewerMoved(pageIndex: 0, visibleRect: .full)
+    workspace.setGuide(y: 0.56)
+    if !CommandLine.arguments.contains("-rc-app-store-sleeve") { workspace.select(piece: back) }
+    if let error = workspace.lastError { throw error }
+}
+#endif
