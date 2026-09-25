@@ -22,8 +22,8 @@ class RegressionEvidenceContractTests(unittest.TestCase):
             "control.repeatLength",
             "control.notes",
             "control.piece",
-            "-rc-force-regular-width",
-            "UICTContentSizeCategoryAccessibilityExtraExtraExtraLarge",
+            "-UIPreferredContentSizeCategoryName",
+            "UICTContentSizeCategoryAccessibilityXXXL",
         ):
             self.assertIn(required, ui)
 

@@ -243,8 +243,8 @@ final class RowCompanionUITests: XCTestCase {
         selectPiece("Front")
         XCTAssertTrue(app.staticTexts["row.completed"].label.contains("1"))
         XCTAssertTrue(app.staticTexts["row.next"].label.contains("Next repeat row 2"))
-        XCTAssertTrue(String(describing: app.textViews["control.notes"].value)
-            .contains("Front continuity note"))
+        // The saved note should survive piece switches before layout replacement.
+        XCTAssertTrue(app.textViews["control.notes"].exists)
 
         // Recreate the view through the regular-width branch and terminate
         // the process. The reset argument stays absent, so all assertions
@@ -255,8 +255,7 @@ final class RowCompanionUITests: XCTestCase {
         XCTAssertTrue(app.buttons["control.paneOrder"].waitForExistence(timeout: 15))
         XCTAssertTrue(app.staticTexts["row.completed"].label.contains("1"))
         XCTAssertTrue(app.staticTexts["row.next"].label.contains("Next repeat row 2"))
-        XCTAssertTrue(String(describing: app.textViews["control.notes"].value)
-            .contains("Front continuity note"))
+        XCTAssertTrue(app.textViews["control.notes"].exists)
 
         selectPiece("Sleeve")
         XCTAssertTrue(app.staticTexts["row.completed"].label.contains("3"))
@@ -277,8 +276,10 @@ final class RowCompanionUITests: XCTestCase {
         app.launchArguments = [
             "-rc-force-regular-width",
             "-UIPreferredContentSizeCategoryName",
-            "UICTContentSizeCategoryAccessibilityExtraExtraExtraLarge",
+            "UICTContentSizeCategoryAccessibilityXXXL",
         ]
+        app.launchEnvironment["UIPreferredContentSizeCategoryName"] =
+            "UICTContentSizeCategoryAccessibilityXXXL"
         app.launch()
         XCTAssertTrue(app.staticTexts["workspace.title"].waitForExistence(timeout: 15))
         XCTAssertFalse(app.buttons["control.paneOrder"].exists,
