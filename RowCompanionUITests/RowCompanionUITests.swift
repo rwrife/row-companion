@@ -286,9 +286,16 @@ final class RowCompanionUITests: XCTestCase {
                        "accessibility Dynamic Type must reflow regular width to stacked")
 
         addPieceAfterCreatingProjectForAccessibilityCheck()
-        XCTAssertTrue(app.buttons["control.completeRow"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.buttons["control.completeRow"].isHittable)
-        XCTAssertGreaterThanOrEqual(app.buttons["control.completeRow"].frame.height, 44)
+        let complete = app.buttons["control.completeRow"]
+        XCTAssertTrue(complete.waitForExistence(timeout: 5))
+        // At accessibility text sizes the stacked layout pushes the counter
+        // controls below the fold; scrolling must bring them into range.
+        for _ in 0..<3 where !complete.isHittable {
+            app.swipeUp()
+        }
+        XCTAssertTrue(complete.isHittable,
+                      "counter control must stay reachable after scrolling at accessibility size")
+        XCTAssertGreaterThanOrEqual(complete.frame.height, 44)
     }
 
     private func addPieceAfterCreatingProjectForAccessibilityCheck() {
