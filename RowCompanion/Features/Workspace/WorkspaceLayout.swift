@@ -189,6 +189,7 @@ private struct ControlPane: View {
             }
             .padding(.vertical)
         }
+        .accessibilityIdentifier("workspace.controlsScroll")
         .frame(maxWidth: .infinity)
     }
 

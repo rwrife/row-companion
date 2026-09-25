@@ -290,8 +290,13 @@ final class RowCompanionUITests: XCTestCase {
         XCTAssertTrue(complete.waitForExistence(timeout: 5))
         // At accessibility text sizes the stacked layout pushes the counter
         // controls below the fold; scrolling must bring them into range.
-        for _ in 0..<3 where !complete.isHittable {
-            app.swipeUp()
+        let controlsScroll = app.scrollViews["workspace.controlsScroll"]
+        for _ in 0..<4 where !complete.isHittable {
+            if controlsScroll.exists {
+                controlsScroll.swipeUp()
+            } else {
+                app.swipeUp()
+            }
         }
         XCTAssertTrue(complete.isHittable,
                       "counter control must stay reachable after scrolling at accessibility size")
