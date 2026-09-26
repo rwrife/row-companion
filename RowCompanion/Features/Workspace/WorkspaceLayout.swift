@@ -23,9 +23,16 @@ struct WorkspaceLayout: View {
         // pattern as `-rc-ui-tests-reset`) so the two-pane branch and pane
         // reorder can be exercised on the compact iPhone UDID CI boots;
         // normal app launches never pass it.
-        let forcedTwoPane = CommandLine.arguments.contains("-rc-force-two-pane")
+        let arguments = CommandLine.arguments
+        let forcedTwoPane = arguments.contains("-rc-force-two-pane")
+        // `-rc-force-regular-width` exercises the real arrangement rule on
+        // the compact CI phone: unlike the older direct two-pane override it
+        // still allows an accessibility Dynamic Type category to reflow the
+        // workspace to stacked. Normal launches never pass either argument.
+        let regularWidth = arguments.contains("-rc-force-regular-width")
+            || horizontalSizeClass == .regular
         let useTwoPane = forcedTwoPane || WorkspaceArrangement.useTwoPane(
-            regularWidth: horizontalSizeClass == .regular,
+            regularWidth: regularWidth,
             isAccessibilitySize: dynamicTypeSize.isAccessibilitySize
         )
         if useTwoPane {
@@ -182,6 +189,7 @@ private struct ControlPane: View {
             }
             .padding(.vertical)
         }
+        .accessibilityIdentifier("workspace.controlsScroll")
         .frame(maxWidth: .infinity)
     }
 

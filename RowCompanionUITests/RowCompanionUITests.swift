@@ -47,6 +47,28 @@ final class RowCompanionUITests: XCTestCase {
         app.buttons["button.addPiece"].tap()
     }
 
+    private func addPiece(_ name: String, repeatLength: String?) {
+        app.buttons["menu.add"].tap()
+        XCTAssertTrue(app.buttons["menu.newPiece"].waitForExistence(timeout: 5))
+        app.buttons["menu.newPiece"].tap()
+        let pieceField = app.textFields["field.pieceName"]
+        XCTAssertTrue(pieceField.waitForExistence(timeout: 5))
+        pieceField.tap()
+        pieceField.typeText(name)
+        if let repeatLength {
+            let repeatField = app.textFields["field.pieceRepeat"]
+            repeatField.tap()
+            repeatField.typeText(repeatLength)
+        }
+        app.buttons["button.addPiece"].tap()
+    }
+
+    private func selectPiece(_ name: String) {
+        app.buttons["control.piece"].tap()
+        XCTAssertTrue(app.buttons[name].waitForExistence(timeout: 5))
+        app.buttons[name].tap()
+    }
+
     /// Run explicitly for store assets; attachments are real simulator pixels.
     func testCaptureAppStoreScreenshots() throws {
         guard ProcessInfo.processInfo.environment["RC_CAPTURE_SCREENSHOTS"] == "1" else {
@@ -183,6 +205,122 @@ final class RowCompanionUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["row.completed"].waitForExistence(timeout: 15))
         XCTAssertTrue(app.staticTexts["row.completed"].label.contains("1"),
                       "relaunch after reorder must show the same committed count")
+    }
+
+    /// Issue #6 end-to-end regression: one real simulator journey crosses
+    /// complete, undo, repeat editing, notes, independent pieces, layout
+    /// replacement, and process relaunch. Assertions read the durable values
+    /// after switching away and back, rather than relying on screenshots.
+    func testEndToEndProgressContinuityAcrossPiecesLayoutAndRelaunch() {
+        createProject("Regression Scarf", piece: "Front", repeatLength: "8")
+
+        let complete = app.buttons["control.completeRow"]
+        XCTAssertTrue(complete.waitForExistence(timeout: 5))
+        complete.tap()
+        complete.tap()
+        app.buttons["control.undo"].tap()
+        XCTAssertTrue(app.staticTexts["row.completed"].label.contains("1"))
+
+        let repeatPicker = app.buttons["control.repeatLength"]
+        XCTAssertTrue(repeatPicker.waitForExistence(timeout: 5))
+        repeatPicker.tap()
+        XCTAssertTrue(app.buttons["4"].waitForExistence(timeout: 5))
+        app.buttons["4"].tap()
+        XCTAssertTrue(app.staticTexts["row.next"].label.contains("Next repeat row 2"))
+
+        let notes = app.textViews["control.notes"]
+        XCTAssertTrue(notes.waitForExistence(timeout: 5))
+        notes.tap()
+        notes.typeText("Front continuity note")
+
+        addPiece("Sleeve", repeatLength: "6")
+        XCTAssertTrue(app.staticTexts["piece.name"].label.contains("Sleeve"))
+        complete.tap()
+        complete.tap()
+        complete.tap()
+        XCTAssertTrue(app.staticTexts["row.completed"].label.contains("3"))
+
+        selectPiece("Front")
+        XCTAssertTrue(app.staticTexts["row.completed"].label.contains("1"))
+        XCTAssertTrue(app.staticTexts["row.next"].label.contains("Next repeat row 2"))
+        // The saved note should survive piece switches before layout replacement.
+        XCTAssertTrue(app.textViews["control.notes"].exists)
+
+        // Recreate the view through the regular-width branch and terminate
+        // the process. The reset argument stays absent, so all assertions
+        // below are reads from the same on-disk SwiftData store.
+        app.launchArguments = ["-rc-force-regular-width"]
+        app.terminate()
+        app.launch()
+        XCTAssertTrue(app.buttons["control.paneOrder"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.staticTexts["row.completed"].label.contains("1"))
+        XCTAssertTrue(app.staticTexts["row.next"].label.contains("Next repeat row 2"))
+        XCTAssertTrue(app.textViews["control.notes"].exists)
+
+        selectPiece("Sleeve")
+        XCTAssertTrue(app.staticTexts["row.completed"].label.contains("3"))
+        XCTAssertTrue(app.staticTexts["row.next"].label.contains("Next repeat row 4"))
+    }
+
+    /// Runs the regular-width decision with an actual accessibility Dynamic
+    /// Type launch preference. The pane-order control proves two-pane at the
+    /// standard size and its absence proves readable stacked reflow at the
+    /// accessibility size. Counter controls must remain reachable afterward.
+    func testAccessibilityDynamicTypeReflowsRegularWidthToStacked() {
+        app.launchArguments = ["-rc-ui-tests-reset", "-rc-force-regular-width"]
+        app.launch()
+        XCTAssertTrue(app.buttons["control.paneOrder"].waitForExistence(timeout: 15),
+                      "forced regular width should use two panes at standard text size")
+
+        app.terminate()
+        app.launchArguments = [
+            "-rc-force-regular-width",
+            "-UIPreferredContentSizeCategoryName",
+            "UICTContentSizeCategoryAccessibilityXXXL",
+        ]
+        app.launchEnvironment["UIPreferredContentSizeCategoryName"] =
+            "UICTContentSizeCategoryAccessibilityXXXL"
+        app.launch()
+        XCTAssertTrue(app.staticTexts["workspace.title"].waitForExistence(timeout: 15))
+        XCTAssertFalse(app.buttons["control.paneOrder"].exists,
+                       "accessibility Dynamic Type must reflow regular width to stacked")
+
+        addPieceAfterCreatingProjectForAccessibilityCheck()
+        let complete = app.buttons["control.completeRow"]
+        XCTAssertTrue(complete.waitForExistence(timeout: 5))
+        // At accessibility text sizes the stacked layout pushes the counter
+        // controls below the fold. Scroll the intended inner control pane;
+        // AX5 can require several short pages because every preceding label
+        // wraps. Bound the loop so a layout regression still fails promptly.
+        let controlsScroll = app.scrollViews["workspace.controlsScroll"]
+        XCTAssertTrue(controlsScroll.exists)
+        // The prior run's diagnostic showed repeated swipeUp() could push an
+        // already-visible control off the TOP edge (button.maxY < scroll.minY)
+        // and keep swiping the wrong way; scroll toward the button instead.
+        for _ in 0..<12 where !complete.isHittable {
+            if complete.frame.maxY < controlsScroll.frame.minY {
+                controlsScroll.swipeDown()
+            } else {
+                controlsScroll.swipeUp()
+            }
+        }
+        XCTAssertTrue(
+            complete.isHittable,
+            "counter control must stay reachable after scrolling at accessibility size; "
+                + "button frame=\(complete.frame), scroll frame=\(controlsScroll.frame)"
+        )
+        XCTAssertGreaterThanOrEqual(complete.frame.height, 44)
+    }
+
+    private func addPieceAfterCreatingProjectForAccessibilityCheck() {
+        app.buttons["menu.add"].tap()
+        app.buttons["menu.newProject"].tap()
+        let title = app.textFields["field.projectTitle"]
+        XCTAssertTrue(title.waitForExistence(timeout: 5))
+        title.tap()
+        title.typeText("Large Type Scarf")
+        app.buttons["button.createProject"].tap()
+        addPiece("Front", repeatLength: nil)
     }
 
     /// Issue #5 privacy gate journey: the export sheet's progress button is
