@@ -289,17 +289,19 @@ final class RowCompanionUITests: XCTestCase {
         let complete = app.buttons["control.completeRow"]
         XCTAssertTrue(complete.waitForExistence(timeout: 5))
         // At accessibility text sizes the stacked layout pushes the counter
-        // controls below the fold; scrolling must bring them into range.
+        // controls below the fold. Scroll the intended inner control pane;
+        // AX5 can require several short pages because every preceding label
+        // wraps. Bound the loop so a layout regression still fails promptly.
         let controlsScroll = app.scrollViews["workspace.controlsScroll"]
-        for _ in 0..<4 where !complete.isHittable {
-            if controlsScroll.exists {
-                controlsScroll.swipeUp()
-            } else {
-                app.swipeUp()
-            }
+        XCTAssertTrue(controlsScroll.exists)
+        for _ in 0..<12 where !complete.isHittable {
+            controlsScroll.swipeUp()
         }
-        XCTAssertTrue(complete.isHittable,
-                      "counter control must stay reachable after scrolling at accessibility size")
+        XCTAssertTrue(
+            complete.isHittable,
+            "counter control must stay reachable after scrolling at accessibility size; "
+                + "button frame=\(complete.frame), scroll frame=\(controlsScroll.frame)"
+        )
         XCTAssertGreaterThanOrEqual(complete.frame.height, 44)
     }
 

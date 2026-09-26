@@ -241,9 +241,8 @@ class CISupportTests(unittest.TestCase):
         self.assertEqual(report['aggregate']['skippedTests'], 1)
 
     def test_resultless_leaf_without_unique_ancestors_fails_closed(self):
-        # An un-verdicted leaf that the aggregate cannot force-attribute
-        # (two verdict deficits but only one pending leaf) cannot be
-        # attested by either source: the export fails closed.
+        # An un-verdicted leaf where aggregate deficits cannot account for the
+        # pending leaf count fails closed.
         summary = {'totalTestCount': 4, 'passedTests': 2, 'failedTests': 1,
                    'skippedTests': 1, 'result': 'Failed'}
         tree = [{'nodeType': 'Suite', 'name': 'Ambiguous', 'result': 'Passed',
@@ -253,7 +252,8 @@ class CISupportTests(unittest.TestCase):
                       'children': [
                           {'nodeType': 'Test Case', 'name': 'b', 'result': 'Failed'},
                           {'nodeType': 'Test Case', 'name': 'c'}]}]}]
-        with self.assertRaisesRegex(ValueError, 'no unique enclosing verdict'):
+        # Total deficits: passedTests (2-1=1), failedTests (1-1=0), skippedTests (1-0=1) -> sum is 2, but pending leaf is 1.
+        with self.assertRaisesRegex(ValueError, 'cannot be reconciled with the aggregate summary'):
             self.support.sanitize_report(tree, summary)
 
     def test_report_fails_closed_on_summary_tree_mismatch(self):

@@ -182,32 +182,21 @@ def _count_cases(node, tallies, pending, ancestor_verdicts=()):
         tallies[node['result']] += 1
         return 1
     # A leaf published WITHOUT its own verdict (runs 35656419607 /
-    # 35661673966 / 35662926491, Xcode 26.0.1: the aggregate summary counted
-    # 57/57 Passed while the tree carried only 56 verdicts — the resultless
-    # leaf is one of those counted cases). Tally it directly only when every
-    # enclosing container shares exactly one verdict, so the inherited
-    # verdict is unambiguous. Otherwise defer it to the aggregate reconcile
-    # in sanitize_report (runs 35952796584 / 36005354055: an intentionally
-    # skipped UI test puts both 'Passed' and 'Skipped' verdicts on the
-    # ancestor path of a resultless leaf; the tree cannot inherit, but the
-    # independent aggregate summary can still attest the leaf uniquely).
-    unique = set(ancestor_verdicts)
-    if len(unique) == 1:
-        tallies[next(iter(unique))] += 1
-        return 1
-    pending.append(sorted(unique))
+    # 35661673966 / 35662926491, Xcode 26.0.1). Ancestor verdicts are only a
+    # hint: recent hosted evidence with real test failures shows leafs under a
+    # failed suite can still represent skipped tests, so we defer all verdict
+    # attribution to the independent aggregate summary.
+    pending.append(sorted(set(ancestor_verdicts)))
     return 1
 
 
 def _reconcile_pending(tallies, pending, clean_summary):
-    """Attribute resultless leaves whose ancestors gave no unique verdict.
+    """Attribute resultless leaves from aggregate deficits.
 
-    Succeeds only when the aggregate summary's per-verdict deficits name
-    exactly one verdict whose deficit equals the number of pending leaves;
-    any other distribution cannot be attested and fails closed. The summary
-    is the same independently exported aggregate that gates publication of
-    the whole report afterwards, so this adds no new information source and
-    no leak surface.
+    Resultless leaves are counted in `caseCount` but not in `tallies`.
+    Attribution succeeds only when aggregate deficits are non-negative and the
+    total deficit equals pending-leaf count; then we add deficits per verdict.
+    Ancestor verdict paths are recorded for diagnostics only.
     """
     if not pending:
         return
@@ -218,14 +207,16 @@ def _reconcile_pending(tallies, pending, clean_summary):
         raise ValueError('Resultless xcresult leaf has no unique enclosing '
                          'verdict and aggregate deficits are inconsistent: '
                          + json.dumps(deficits))
-    positive = [v for v, d in deficits.items() if d > 0]
-    if len(positive) != 1 or deficits[positive[0]] != len(pending):
+    unresolved = sum(deficits.values())
+    if unresolved != len(pending):
         raise ValueError('Resultless xcresult leaf has no unique enclosing '
                          'verdict and cannot be reconciled with the '
                          'aggregate summary: ' + json.dumps(
                              {'pendingAncestors': pending,
-                              'deficits': deficits}))
-    tallies[positive[0]] += len(pending)
+                              'deficits': deficits,
+                              'pendingCount': len(pending)}))
+    for verdict, amount in deficits.items():
+        tallies[verdict] += amount
 
 
 def sanitize_report(payload, summary):
