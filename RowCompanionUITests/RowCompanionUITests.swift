@@ -294,8 +294,15 @@ final class RowCompanionUITests: XCTestCase {
         // wraps. Bound the loop so a layout regression still fails promptly.
         let controlsScroll = app.scrollViews["workspace.controlsScroll"]
         XCTAssertTrue(controlsScroll.exists)
+        // The prior run's diagnostic showed repeated swipeUp() could push an
+        // already-visible control off the TOP edge (button.maxY < scroll.minY)
+        // and keep swiping the wrong way; scroll toward the button instead.
         for _ in 0..<12 where !complete.isHittable {
-            controlsScroll.swipeUp()
+            if complete.frame.maxY < controlsScroll.frame.minY {
+                controlsScroll.swipeDown()
+            } else {
+                controlsScroll.swipeUp()
+            }
         }
         XCTAssertTrue(
             complete.isHittable,

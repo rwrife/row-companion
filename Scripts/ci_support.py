@@ -185,21 +185,24 @@ def _count_cases(node, tallies, pending, ancestor_verdicts=()):
     # 35661673966 / 35662926491, Xcode 26.0.1). Ancestor verdicts are only a
     # hint: recent hosted evidence with real test failures shows leafs under a
     # failed suite can still represent skipped tests, so we defer all verdict
-    # attribution to the independent aggregate summary.
+    # attribution to the independent aggregate summary. A resultless leaf may
+    # also be an empty structural node, so it is only tallied as a case if the
+    # aggregate summary has a matching deficit.
     pending.append(sorted(set(ancestor_verdicts)))
-    return 1
+    return 0
 
 
 def _reconcile_pending(tallies, pending, clean_summary):
     """Attribute resultless leaves from aggregate deficits.
 
-    Resultless leaves are counted in `caseCount` but not in `tallies`.
-    Attribution succeeds only when aggregate deficits are non-negative and the
-    total deficit equals pending-leaf count; then we add deficits per verdict.
-    Ancestor verdict paths are recorded for diagnostics only.
+    Resultless leaves are deferred here rather than assumed to be test cases
+    (an empty structural wrapper also presents as a resultless leaf).
+    Attribution succeeds only when aggregate deficits are non-negative and
+    at most equal to the pending leaf count; deficits are attributed directly
+    to tallies and the total attributed is added to caseCount.
     """
     if not pending:
-        return
+        return 0
     keys = {'Passed': 'passedTests', 'Failed': 'failedTests',
             'Skipped': 'skippedTests'}
     deficits = {v: clean_summary[k] - tallies[v] for v, k in keys.items()}
@@ -208,7 +211,7 @@ def _reconcile_pending(tallies, pending, clean_summary):
                          'verdict and aggregate deficits are inconsistent: '
                          + json.dumps(deficits))
     unresolved = sum(deficits.values())
-    if unresolved != len(pending):
+    if unresolved > len(pending):
         raise ValueError('Resultless xcresult leaf has no unique enclosing '
                          'verdict and cannot be reconciled with the '
                          'aggregate summary: ' + json.dumps(
@@ -217,6 +220,7 @@ def _reconcile_pending(tallies, pending, clean_summary):
                               'pendingCount': len(pending)}))
     for verdict, amount in deficits.items():
         tallies[verdict] += amount
+    return unresolved
 
 
 def sanitize_report(payload, summary):
@@ -242,7 +246,7 @@ def sanitize_report(payload, summary):
     pending: list = []
     case_count = sum(_count_cases(node, tallies, pending) for node in nodes)
     if pending:
-        _reconcile_pending(tallies, pending, clean_summary)
+        case_count += _reconcile_pending(tallies, pending, clean_summary)
     if (case_count != clean_summary['totalTestCount']
             or tallies['Passed'] != clean_summary['passedTests']
             or tallies['Failed'] != clean_summary['failedTests']

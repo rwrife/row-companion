@@ -240,6 +240,26 @@ class CISupportTests(unittest.TestCase):
         self.assertEqual(report['caseCount'], 2)
         self.assertEqual(report['aggregate']['skippedTests'], 1)
 
+    def test_resultless_structural_leaf_is_not_counted_as_case(self):
+        # Real hosted failed run 36256808490: Xcode emitted nine resultless
+        # leaves but the aggregate had only eight verdict deficits. The ninth
+        # leaf is an empty structural wrapper, not another test case.
+        summary = {'totalTestCount': 8, 'passedTests': 6, 'failedTests': 1,
+                   'skippedTests': 1, 'result': 'Failed'}
+        children = [
+            {'nodeType': 'Test Case', 'name': 'failedCase'},
+            {'nodeType': 'UI test bundle', 'name': 'emptyWrapper'},
+            {'nodeType': 'Test Case', 'name': 'skippedCase'},
+        ] + [
+            {'nodeType': 'Test Case', 'name': 'passed' + str(index)}
+            for index in range(6)
+        ]
+        tree = [{'nodeType': 'Test Plan', 'name': 'Plan', 'result': 'Failed',
+                 'children': children}]
+        report = self.support.sanitize_report(tree, summary)
+        self.assertEqual(report['caseCount'], 8)
+        self.assertEqual(report['aggregate']['failedTests'], 1)
+
     def test_resultless_leaf_without_unique_ancestors_fails_closed(self):
         # An un-verdicted leaf where aggregate deficits cannot account for the
         # pending leaf count fails closed.
