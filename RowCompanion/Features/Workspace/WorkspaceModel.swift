@@ -68,6 +68,9 @@ public final class WorkspaceModel {
     /// Non-destructive preview of a staged restore shown in the confirmation
     /// sheet before anything becomes durable.
     public private(set) var restorePreview: BackupService.RestorePreview?
+    /// True when reading the previous durable session failed; while true,
+    /// session-persistence is inhibited to protect the durable on-disk record.
+    public private(set) var sessionPersistenceDisabled = false
 
     public let backups: BackupService
 
@@ -91,6 +94,7 @@ public final class WorkspaceModel {
         } catch {
             saved = nil
             readFailed = true
+            sessionPersistenceDisabled = true
             statusMessage = "Last-open position could not be read."
         }
 
@@ -118,6 +122,7 @@ public final class WorkspaceModel {
     /// Persist selection and control position separately from row progress.
     /// Repository rollback preserves the previous durable session on failure.
     public func persistSession() {
+        guard !sessionPersistenceDisabled else { return }
         let session = WorkspaceSessionRecord(
             selectedProjectID: selectedProjectID,
             selectedPieceID: selectedPieceID,

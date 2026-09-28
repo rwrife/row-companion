@@ -221,6 +221,34 @@ final class ReferenceStateTests: XCTestCase {
         XCTAssertEqual(model2.controlScrollOffset, 0, "negative scroll offset must normalize to 0")
     }
 
+    /// A transient session-read failure must inhibit every later persistence
+    /// path in that model instance (geometry, selection, lifecycle capture),
+    /// preserving the prior durable record rather than saving fallback state.
+    func testSessionReadFailureNeverOverwritesPriorDurableSession() throws {
+        let repo = try RowRepository(storeURL: storeURL)
+        let project = try repo.createProject(title: "P")
+        let first = try repo.addPiece(to: project.id, name: "first")
+        let second = try repo.addPiece(to: project.id, name: "second")
+        let prior = WorkspaceSessionRecord(
+            selectedProjectID: project.id,
+            selectedPieceID: second.id,
+            controlScrollOffset: 125
+        )
+        try repo.saveWorkspaceSession(prior)
+
+        struct ReadFault: Error {}
+        repo.testSessionReadFault = { throw ReadFault() }
+        let model = WorkspaceModel(repository: repo)
+        XCTAssertTrue(model.sessionPersistenceDisabled)
+        model.select(piece: first.id)
+        model.setControlScrollOffset(9)
+        model.captureCurrentWorkspace()
+
+        repo.testSessionReadFault = nil
+        XCTAssertEqual(try repo.workspaceSession(), prior,
+                       "all fallback persistence must remain inhibited after a failed read")
+    }
+
     /// Guide movement is pure view state: setting it never records a row
     /// event and works on text-only pieces with no document at all.
     func testGuideNeverTouchesRowHistoryAndWorksWithoutDocument() throws {

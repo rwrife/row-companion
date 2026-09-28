@@ -221,11 +221,15 @@ final class RowCompanionUITests: XCTestCase {
     }
 
     /// Issue #13 resume journey: creates two projects with multiple pieces,
-    /// selects the second project + second piece, types notes, and advances rows.
-    /// Terminates and relaunches without the reset argument. The app must resume
-    /// into the same project, piece, count, and control-pane position without
-    /// falling back to the first item. Physical lock/background acceptance stays
-    /// coordinated with issue #6; lifecycle wiring is covered separately.
+    /// selects the second project + second piece, types notes, advances rows,
+    /// and scrolls the control pane. Backgrounds/foregrounds the app, then
+    /// force-terminates and relaunches without the reset argument. The app
+    /// must resume into the same project, piece, count, and control-pane
+    /// position without falling back to the first item. Evidence boundary:
+    /// simulator backgrounding + forced termination only — normal interaction
+    /// already persists, so the scenePhase capture itself is proven by the
+    /// host wiring contract plus the read-failure regression test, and the
+    /// physical device-lock leg stays with issue #6.
     func testLastWorkspaceRestoresAcrossBackgroundAndRelaunch() {
         createProject("First Project", piece: "P1", repeatLength: nil)
 

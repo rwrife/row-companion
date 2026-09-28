@@ -31,6 +31,10 @@ public final class RowRepository {
     /// durable commit throws instead of saving. Production never sets this.
     var testSaveFault: (() throws -> Void)?
 
+    /// Fault-injection hook used by session tests: when set, the next
+    /// session read throws. Production never sets this.
+    var testSessionReadFault: (() throws -> Void)?
+
     public init(storeURL: URL) throws {
         self.storeURL = storeURL
         self.container = try RowStoreFactory.makeContainer(storeURL: storeURL)
@@ -214,6 +218,9 @@ public final class RowRepository {
     /// Read the durable active-session record, or `nil` if one has never been
     /// saved (fresh install / pre-#13 store).
     public func workspaceSession() throws -> WorkspaceSessionRecord? {
+        if let fault = testSessionReadFault {
+            try fault()
+        }
         try storedWorkspaceSession()?.record
     }
 
