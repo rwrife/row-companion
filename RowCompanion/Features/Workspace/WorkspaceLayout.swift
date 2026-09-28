@@ -166,7 +166,7 @@ private struct ControlPane: View {
     /// Prevent the first geometry callback from overwriting the restored
     /// durable offset while programmatic scrolling settles.
     @State private var restoringScroll = true
-    @State private var latestScrollGeometry = ControlScrollGeometry(offset: 0, maximumOffset: 0)
+    @State private var restoringTarget: Double?
 
     var body: some View {
         ScrollView {
@@ -200,37 +200,26 @@ private struct ControlPane: View {
             ))
             return ControlScrollGeometry(offset: offset, maximumOffset: maximum)
         } action: { _, geometry in
-            latestScrollGeometry = geometry
             if restoringScroll {
-                // The settle task below owns the restore phase. Geometry can
-                // report temporary zero/short content sizes during layout;
-                // never let those callbacks overwrite the durable target.
+                if let target = restoringTarget, abs(geometry.offset - target) < 0.5 {
+                    restoringScroll = false
+                    restoringTarget = nil
+                }
+                // Ignore all other geometry during restore so an intermediate
+                // layout pass can never overwrite the durable target.
             } else {
                 model.setControlScrollOffset(geometry.offset)
             }
         }
         .task(id: model.selectedPieceID) {
             let requested = model.controlScrollOffset
-            restoringScroll = requested > 0
-            scrollPosition.scrollTo(y: requested)
-            guard requested > 0 else { return }
-
-            // Allow initial content measurement and programmatic scrolling to
-            // settle before accepting a reachable/clamped final offset. This
-            // avoids both intermediate-overwrite and permanently-disabled
-            // persistence when content became shorter since the last launch.
-            try? await Task.sleep(for: .milliseconds(300))
-            guard !Task.isCancelled else { return }
-            let reachable = min(requested, latestScrollGeometry.maximumOffset)
-            if abs(latestScrollGeometry.offset - reachable) >= 0.5 {
-                scrollPosition.scrollTo(y: reachable)
-                try? await Task.sleep(for: .milliseconds(100))
-                guard !Task.isCancelled else { return }
-            }
-            let settled = min(latestScrollGeometry.offset, latestScrollGeometry.maximumOffset)
-            restoringScroll = false
-            if abs(settled - requested) >= 0.5 {
-                model.setControlScrollOffset(settled)
+            let target = max(0, requested)
+            restoringTarget = target
+            restoringScroll = target > 0
+            scrollPosition.scrollTo(y: target)
+            if target == 0 {
+                restoringScroll = false
+                restoringTarget = nil
             }
         }
     }
