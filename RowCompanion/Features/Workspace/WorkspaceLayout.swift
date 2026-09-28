@@ -213,16 +213,19 @@ private struct ControlPane: View {
                 model.setControlScrollOffset(geometry.offset)
             }
         }
+        .onChange(of: model.selectedPieceID) { _, _ in
+            // Arm restore protection immediately on piece changes so any
+            // geometry callback between selection and task execution cannot
+            // persist a transitional offset.
+            restoringTarget = max(0, model.controlScrollOffset)
+            restoringScroll = true
+        }
         .task(id: model.selectedPieceID) {
             let requested = model.controlScrollOffset
             let target = max(0, requested)
             restoringTarget = target
-            restoringScroll = target > 0
+            restoringScroll = true
             scrollPosition.scrollTo(y: target)
-            if target == 0 {
-                restoringScroll = false
-                restoringTarget = nil
-            }
         }
     }
 
