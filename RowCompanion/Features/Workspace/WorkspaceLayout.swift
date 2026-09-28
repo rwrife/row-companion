@@ -189,20 +189,30 @@ private struct ControlPane: View {
         .accessibilityIdentifier("workspace.controlsScroll")
         .frame(maxWidth: .infinity)
         .scrollPosition($scrollPosition)
-        .onScrollGeometryChange(for: Double.self) { geometry in
-            max(0, Double(geometry.contentOffset.y + geometry.contentInsets.top))
-        } action: { _, offset in
+        .onScrollGeometryChange(for: ControlScrollGeometry.self) { geometry in
+            let offset = max(0, Double(geometry.contentOffset.y + geometry.contentInsets.top))
+            let maximum = max(0, Double(
+                geometry.contentSize.height
+                    - geometry.containerSize.height
+                    + geometry.contentInsets.bottom
+                    + geometry.contentInsets.top
+            ))
+            return ControlScrollGeometry(offset: offset, maximumOffset: maximum)
+        } action: { _, geometry in
             if restoringScroll {
                 // Programmatic restoration is asynchronous. Do not overwrite
                 // the durable target with transitional intermediate offsets.
-                // End restoration only when the geometry callback matches
-                // the requested target within a tight tolerance.
-                let target = model.controlScrollOffset
-                if abs(offset - target) < 0.5 {
+                // Clamp stale offsets to the current content range so a pane
+                // that became shorter cannot leave persistence disabled.
+                let target = min(model.controlScrollOffset, geometry.maximumOffset)
+                if abs(geometry.offset - target) < 0.5 {
                     restoringScroll = false
+                    if abs(target - model.controlScrollOffset) >= 0.5 {
+                        model.setControlScrollOffset(target)
+                    }
                 }
             } else {
-                model.setControlScrollOffset(offset)
+                model.setControlScrollOffset(geometry.offset)
             }
         }
         .task(id: model.selectedPieceID) {
@@ -310,6 +320,11 @@ private struct ControlPane: View {
                 Text("Set the completed-row count explicitly. Confirm to apply.")
             }
         }
+    }
+
+    private struct ControlScrollGeometry: Equatable {
+        let offset: Double
+        let maximumOffset: Double
     }
 }
 

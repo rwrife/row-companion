@@ -85,10 +85,12 @@ public final class WorkspaceModel {
     private func restoreSessionOrFirstProject() {
         reload()
         let saved: WorkspaceSessionRecord?
+        var readFailed = false
         do {
             saved = try repository.workspaceSession()
         } catch {
             saved = nil
+            readFailed = true
             statusMessage = "Last-open position could not be read."
         }
 
@@ -106,7 +108,11 @@ public final class WorkspaceModel {
         controlScrollOffset = rawOffset.isFinite ? Swift.max(0, rawOffset) : 0
         loadReference()
         refreshStatus()
-        persistSession()
+        // If reading the previous session failed, preserve the on-disk record
+        // untouched rather than overwriting it with fallback selections.
+        if !readFailed {
+            persistSession()
+        }
     }
 
     /// Persist selection and control position separately from row progress.

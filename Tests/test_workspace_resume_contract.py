@@ -30,6 +30,7 @@ class WorkspaceResumeContractTests(unittest.TestCase):
         self.assertIn("setControlScrollOffset", model)
         self.assertIn("repository.workspaceSession()", model)
         self.assertIn("repository.saveWorkspaceSession", model)
+        self.assertIn("if !readFailed", model)
         self.assertIn("persistReference(reference)", model)
 
         resume_surface = model.split("// MARK: - Session restore", 1)[1].split(
