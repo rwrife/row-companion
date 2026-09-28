@@ -162,6 +162,10 @@ private struct ControlPane: View {
     @State private var showCorrection = false
     @State private var correctionText = ""
     @State private var confirmCorrection = false
+    @State private var scrollPosition = ScrollPosition(edge: .top)
+    /// Prevent the first geometry callback from overwriting the restored
+    /// durable offset while programmatic scrolling settles.
+    @State private var restoringScroll = true
 
     var body: some View {
         ScrollView {
@@ -182,7 +186,22 @@ private struct ControlPane: View {
             }
             .padding(.vertical)
         }
+        .accessibilityIdentifier("workspace.controlsScroll")
         .frame(maxWidth: .infinity)
+        .scrollPosition($scrollPosition)
+        .onScrollGeometryChange(for: Double.self) { geometry in
+            max(0, Double(geometry.contentOffset.y + geometry.contentInsets.top))
+        } action: { _, offset in
+            if !restoringScroll {
+                model.setControlScrollOffset(offset)
+            }
+        }
+        .task(id: model.selectedPieceID) {
+            restoringScroll = true
+            scrollPosition.scrollTo(y: model.controlScrollOffset)
+            await Task.yield()
+            restoringScroll = false
+        }
     }
 
     /// Manual reading guide control: a slider (VoiceOver-adjustable, keyboard

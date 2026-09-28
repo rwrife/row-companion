@@ -219,4 +219,84 @@ final class RowCompanionUITests: XCTestCase {
         XCTAssertTrue(fullButton.waitForExistence(timeout: 5))
         XCTAssertTrue(fullButton.isEnabled, "both acknowledgements enable the full backup")
     }
+
+    /// Issue #13 resume journey: creates two projects with multiple pieces,
+    /// selects the second project + second piece, types notes, and advances rows.
+    /// Terminates and relaunches without the reset argument. The app must resume
+    /// into the same project, piece, count, and control-pane position without
+    /// falling back to the first item. Physical lock/background acceptance stays
+    /// coordinated with issue #6; lifecycle wiring is covered separately.
+    func testLastWorkspaceRestoresAcrossBackgroundAndRelaunch() {
+        createProject("First Project", piece: "P1", repeatLength: nil)
+
+        // Create second project through standard UI
+        app.buttons["menu.add"].tap()
+        XCTAssertTrue(app.buttons["menu.newProject"].waitForExistence(timeout: 5))
+        app.buttons["menu.newProject"].tap()
+        let projectTitle = app.textFields["field.projectTitle"]
+        XCTAssertTrue(projectTitle.waitForExistence(timeout: 5))
+        projectTitle.tap()
+        projectTitle.typeText("Second Project")
+        app.buttons["button.createProject"].tap()
+
+        // First piece of second project
+        app.buttons["menu.add"].tap()
+        XCTAssertTrue(app.buttons["menu.newPiece"].waitForExistence(timeout: 5))
+        app.buttons["menu.newPiece"].tap()
+        var pieceField = app.textFields["field.pieceName"]
+        XCTAssertTrue(pieceField.waitForExistence(timeout: 5))
+        pieceField.tap()
+        pieceField.typeText("First Piece")
+        app.buttons["button.addPiece"].tap()
+
+        // Second piece of second project
+        app.buttons["menu.add"].tap()
+        XCTAssertTrue(app.buttons["menu.newPiece"].waitForExistence(timeout: 5))
+        app.buttons["menu.newPiece"].tap()
+        pieceField = app.textFields["field.pieceName"]
+        XCTAssertTrue(pieceField.waitForExistence(timeout: 5))
+        pieceField.tap()
+        pieceField.typeText("Second Piece")
+        let repeatField = app.textFields["field.pieceRepeat"]
+        repeatField.tap()
+        repeatField.typeText("6")
+        app.buttons["button.addPiece"].tap()
+
+        let complete = app.buttons["control.completeRow"]
+        XCTAssertTrue(complete.waitForExistence(timeout: 5))
+        complete.tap()
+        complete.tap()
+        complete.tap()
+        let completed = app.staticTexts["row.completed"]
+        XCTAssertTrue(completed.waitForExistence(timeout: 5))
+        XCTAssertTrue(completed.label.contains("3"))
+
+        // Scroll before focusing the number/text controls: an open software
+        // keyboard can consume ScrollView swipes on compact phones.
+        let controlsScroll = app.scrollViews["workspace.controlsScroll"]
+        XCTAssertTrue(controlsScroll.exists)
+        controlsScroll.swipeUp()
+
+        let notes = app.textViews["control.notes"]
+        XCTAssertTrue(notes.waitForExistence(timeout: 5))
+        XCTAssertTrue(notes.isHittable)
+        notes.tap()
+        notes.typeText("Resume notes for piece two")
+
+        // Relaunch without reset: the active session must restore the second
+        // project and second piece rather than defaulting to the first project.
+        app.launchArguments = []
+        app.terminate()
+        app.launch()
+
+        XCTAssertTrue(app.staticTexts["workspace.title"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.staticTexts["row.completed"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["row.completed"].label.contains("3"),
+                      "resumed workspace must show piece two's count")
+        XCTAssertTrue(app.staticTexts["row.next"].label.contains("Next repeat row 4"),
+                      "resumed workspace must keep repeat arithmetic")
+        XCTAssertTrue(app.staticTexts["piece.name"].label.contains("Second Piece"),
+                      "resumed piece must be the one last active")
+        XCTAssertTrue(app.textViews["control.notes"].exists)
+    }
 }

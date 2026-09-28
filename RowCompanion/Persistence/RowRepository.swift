@@ -209,6 +209,59 @@ public final class RowRepository {
         try commit()
     }
 
+    // MARK: - Workspace session (issue #13 resume)
+
+    /// Read the durable active-session record, or `nil` if one has never been
+    /// saved (fresh install / pre-#13 store).
+    public func workspaceSession() throws -> WorkspaceSessionRecord? {
+        try storedWorkspaceSession()?.record
+    }
+
+    /// Persist which project/piece/scroll-offset the user last had active.
+    /// A selected piece must belong to the selected project; a selected
+    /// project must exist. Invalid references are rejected rather than
+    /// silently normalized, so a caller bug surfaces immediately instead of
+    /// resuming into a mismatched project/piece pair. Non-finite or negative
+    /// scroll offsets are normalized to zero (best-effort UI state, not a
+    /// count). Like every other durable write here, a rejected commit rolls
+    /// back so the previous session remains intact.
+    public func saveWorkspaceSession(_ session: WorkspaceSessionRecord) throws {
+        if let projectID = session.selectedProjectID {
+            guard try projectExists(projectID) else { throw RowRepositoryError.projectNotFound(projectID) }
+        }
+        if let pieceID = session.selectedPieceID {
+            guard let piece = try storedPiece(pieceID) else { throw RowRepositoryError.pieceNotFound(pieceID) }
+            guard piece.projectID == session.selectedProjectID else {
+                throw RowRepositoryError.pieceNotFound(pieceID)
+            }
+        }
+        let offset = session.controlScrollOffset.isFinite ? Swift.max(0, session.controlScrollOffset) : 0
+        let stored: StoredWorkspaceSession
+        if let existing = try storedWorkspaceSession() {
+            stored = existing
+        } else {
+            stored = StoredWorkspaceSession(
+                key: WorkspaceSessionRecord.activeKey,
+                selectedProjectID: session.selectedProjectID,
+                selectedPieceID: session.selectedPieceID,
+                controlScrollOffset: offset,
+                updatedAt: Date()
+            )
+            context.insert(stored)
+        }
+        stored.selectedProjectID = session.selectedProjectID
+        stored.selectedPieceID = session.selectedPieceID
+        stored.controlScrollOffset = offset
+        stored.updatedAt = Date()
+        try commit()
+    }
+
+    private func storedWorkspaceSession() throws -> StoredWorkspaceSession? {
+        let key = WorkspaceSessionRecord.activeKey
+        let descriptor = FetchDescriptor<StoredWorkspaceSession>(predicate: #Predicate { $0.key == key })
+        return try context.fetch(descriptor).first
+    }
+
     // MARK: - Row actions (atomic event + count)
 
     /// Apply one row action atomically. On any failure (including an injected
