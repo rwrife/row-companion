@@ -201,12 +201,14 @@ private struct ControlPane: View {
             return ControlScrollGeometry(offset: offset, maximumOffset: maximum)
         } action: { _, geometry in
             if restoringScroll {
-                if let target = restoringTarget, abs(geometry.offset - target) < 0.5 {
+                if let target = restoringTarget,
+                   geometry.maximumOffset >= target,
+                   abs(geometry.offset - target) < 0.5 {
                     restoringScroll = false
                     restoringTarget = nil
                 }
-                // Ignore all other geometry during restore so an intermediate
-                // layout pass can never overwrite the durable target.
+                // Ignore all geometry until layout has fully expanded to
+                // accommodate the target offset and scrolling has settled.
             } else {
                 model.setControlScrollOffset(geometry.offset)
             }
