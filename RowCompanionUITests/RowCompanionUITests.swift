@@ -282,6 +282,14 @@ final class RowCompanionUITests: XCTestCase {
         XCTAssertTrue(notes.isHittable)
         notes.tap()
         notes.typeText("Resume notes for piece two")
+        // Dismiss the keyboard so later relaunch assertions start from the
+        // scrolled, unobscured control pane.
+        app.swipeDown()
+
+        // Capture the control-pane position before termination; the restored
+        // pane must keep the notes editor on screen without scrolling back.
+        let notesFrameBefore = notes.frame
+        XCTAssertTrue(notesFrameBefore.height > 0)
 
         // Relaunch without reset: the active session must restore the second
         // project and second piece rather than defaulting to the first project.
@@ -290,6 +298,17 @@ final class RowCompanionUITests: XCTestCase {
         app.launch()
 
         XCTAssertTrue(app.staticTexts["workspace.title"].waitForExistence(timeout: 15))
+
+        let projectPicker = app.buttons["control.project"]
+        XCTAssertTrue(projectPicker.waitForExistence(timeout: 10))
+        XCTAssertTrue(projectPicker.label.contains("Second Project"),
+                      "resumed project picker must name the project that was active, got \(projectPicker.label)")
+
+        let piecePicker = app.buttons["control.piece"]
+        XCTAssertTrue(piecePicker.exists)
+        XCTAssertTrue(piecePicker.label.contains("Second Piece"),
+                      "resumed piece picker must name the piece that was active, got \(piecePicker.label)")
+
         XCTAssertTrue(app.staticTexts["row.completed"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.staticTexts["row.completed"].label.contains("3"),
                       "resumed workspace must show piece two's count")
@@ -297,6 +316,16 @@ final class RowCompanionUITests: XCTestCase {
                       "resumed workspace must keep repeat arithmetic")
         XCTAssertTrue(app.staticTexts["piece.name"].label.contains("Second Piece"),
                       "resumed piece must be the one last active")
-        XCTAssertTrue(app.textViews["control.notes"].exists)
+
+        // The restored scroll position should keep the notes editor near its
+        // pre-termination location; a reset-to-top session would put it far
+        // off the captured baseline (or require scrolling to reach it).
+        let notesAfterRelaunch = app.textViews["control.notes"]
+        XCTAssertTrue(notesAfterRelaunch.waitForExistence(timeout: 10))
+        XCTAssertTrue(notesAfterRelaunch.isHittable,
+                      "restored scroll position must keep the notes editor reachable")
+        XCTAssertTrue(abs(notesAfterRelaunch.frame.minY - notesFrameBefore.minY) < 80,
+                      "restored scroll position must match the pre-termination pane offset, "
+                      + "got \(notesAfterRelaunch.frame.minY) vs \(notesFrameBefore.minY)")
     }
 }

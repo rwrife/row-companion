@@ -182,6 +182,45 @@ final class ReferenceStateTests: XCTestCase {
         XCTAssertNotNil(model.lastError)
     }
 
+    /// When a stored workspace session references a deleted/vanished project
+    /// or piece, WorkspaceModel falls back deterministically to existing items
+    /// without mutating any row count or throwing errors.
+    func testModelFallsBackWhenStoredSessionItemsAreMissing() throws {
+        let repo = try RowRepository(storeURL: storeURL)
+        let project = try repo.createProject(title: "Existing")
+        let piece = try repo.addPiece(to: project.id, name: "only-piece")
+
+        // Persist a session pointing to non-existent project & piece IDs.
+        // We write directly to StoredWorkspaceSession in the underlying context
+        // to emulate a store where the referenced rows were removed/corrupted.
+        let bogusProjectID = UUID()
+        let bogusPieceID = UUID()
+        let stored = StoredWorkspaceSession(
+            key: WorkspaceSessionRecord.activeKey,
+            selectedProjectID: bogusProjectID,
+            selectedPieceID: bogusPieceID,
+            controlScrollOffset: 120.0,
+            updatedAt: Date()
+        )
+        repo.context.insert(stored)
+        try repo.commit()
+
+        let model = WorkspaceModel(repository: repo)
+        XCTAssertEqual(model.selectedProjectID, project.id, "must fall back to first existing project")
+        XCTAssertEqual(model.selectedPieceID, piece.id, "must fall back to first existing piece")
+        XCTAssertEqual(model.controlScrollOffset, 120.0, "valid scroll offset should still be adopted")
+        XCTAssertEqual(try repo.piece(piece.id).completedRows, 0, "fallback must not touch counts")
+
+        // Verify that a corrupt negative scroll offset normalizes cleanly.
+        stored.selectedProjectID = project.id
+        stored.selectedPieceID = piece.id
+        stored.controlScrollOffset = -50.0
+        try repo.commit()
+
+        let model2 = WorkspaceModel(repository: repo)
+        XCTAssertEqual(model2.controlScrollOffset, 0, "negative scroll offset must normalize to 0")
+    }
+
     /// Guide movement is pure view state: setting it never records a row
     /// event and works on text-only pieces with no document at all.
     func testGuideNeverTouchesRowHistoryAndWorksWithoutDocument() throws {

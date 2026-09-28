@@ -192,15 +192,30 @@ private struct ControlPane: View {
         .onScrollGeometryChange(for: Double.self) { geometry in
             max(0, Double(geometry.contentOffset.y + geometry.contentInsets.top))
         } action: { _, offset in
-            if !restoringScroll {
+            if restoringScroll {
+                // Programmatic restoration is asynchronous. Ignore geometry
+                // echoes until either the requested position has actually
+                // been observed or the ScrollView clamped it to its maximum
+                // reachable offset (then adopt that reachable value).
+                let target = model.controlScrollOffset
+                if abs(offset - target) < 0.5 || (target > 0 && offset > 0) {
+                    restoringScroll = false
+                    if abs(offset - target) >= 0.5 {
+                        model.setControlScrollOffset(offset)
+                    }
+                }
+            } else {
                 model.setControlScrollOffset(offset)
             }
         }
         .task(id: model.selectedPieceID) {
             restoringScroll = true
             scrollPosition.scrollTo(y: model.controlScrollOffset)
-            await Task.yield()
-            restoringScroll = false
+            if model.controlScrollOffset == 0 {
+                // A top-position restore needs no asynchronous settle; its
+                // first geometry callback is equivalent to the target.
+                restoringScroll = false
+            }
         }
     }
 

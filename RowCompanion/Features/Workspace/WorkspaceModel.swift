@@ -102,7 +102,8 @@ public final class WorkspaceModel {
         selectedPieceID = pieces.contains { $0.id == savedPieceID }
             ? savedPieceID
             : pieces.first?.id
-        controlScrollOffset = saved?.controlScrollOffset ?? 0
+        let rawOffset = saved?.controlScrollOffset ?? 0
+        controlScrollOffset = rawOffset.isFinite ? Swift.max(0, rawOffset) : 0
         loadReference()
         refreshStatus()
         persistSession()

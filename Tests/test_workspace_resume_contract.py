@@ -65,6 +65,11 @@ class WorkspaceResumeContractTests(unittest.TestCase):
         ):
             self.assertIn(name, repository_tests)
         self.assertIn("testLastWorkspaceRestoresAcrossBackgroundAndRelaunch", ui_tests)
+        reference_tests = (
+            ROOT / "RowCompanionTests" / "ReferenceStateTests.swift"
+        ).read_text()
+        self.assertIn("testModelFallsBackWhenStoredSessionItemsAreMissing", reference_tests)
+        self.assertIn("fallback must not touch counts", reference_tests)
 
 
 if __name__ == "__main__":
