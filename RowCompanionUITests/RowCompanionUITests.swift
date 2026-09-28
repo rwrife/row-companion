@@ -271,25 +271,36 @@ final class RowCompanionUITests: XCTestCase {
         XCTAssertTrue(completed.waitForExistence(timeout: 5))
         XCTAssertTrue(completed.label.contains("3"))
 
-        // Scroll before focusing the number/text controls: an open software
-        // keyboard can consume ScrollView swipes on compact phones.
+        // Prove the control pane actually moved before testing restoration;
+        // comparing two frames without this precondition would be vacuous if
+        // the swipe had no effect.
         let controlsScroll = app.scrollViews["workspace.controlsScroll"]
         XCTAssertTrue(controlsScroll.exists)
-        controlsScroll.swipeUp()
-
         let notes = app.textViews["control.notes"]
+        XCTAssertTrue(notes.exists)
+        let notesFrameAtTop = notes.frame
+        controlsScroll.swipeUp()
         XCTAssertTrue(notes.waitForExistence(timeout: 5))
         XCTAssertTrue(notes.isHittable)
+        let notesFrameBefore = notes.frame
+        XCTAssertLessThan(notesFrameBefore.minY, notesFrameAtTop.minY - 30,
+                          "swipe must establish a nonzero control-pane offset")
+
+        // Type only after scrolling; a decimal/text keyboard can consume the
+        // intended ScrollView swipe on compact phones.
         notes.tap()
         notes.typeText("Resume notes for piece two")
-        // Dismiss the keyboard so later relaunch assertions start from the
-        // scrolled, unobscured control pane.
-        app.swipeDown()
 
-        // Capture the control-pane position before termination; the restored
-        // pane must keep the notes editor on screen without scrolling back.
-        let notesFrameBefore = notes.frame
-        XCTAssertTrue(notesFrameBefore.height > 0)
+        // Exercise the simulator background/foreground lifecycle before the
+        // force-termination path. Physical lock remains issue #6 evidence.
+        XCUIDevice.shared.press(.home)
+        XCTAssertNotEqual(app.state, .runningForeground)
+        app.activate()
+        XCTAssertTrue(app.wait(for: .runningForeground, timeout: 10))
+        XCTAssertTrue(app.staticTexts["row.completed"].label.contains("3"),
+                      "background/foreground must not change the count")
+        XCTAssertTrue(app.staticTexts["piece.name"].label.contains("Second Piece"),
+                      "background/foreground must retain active piece")
 
         // Relaunch without reset: the active session must restore the second
         // project and second piece rather than defaulting to the first project.
