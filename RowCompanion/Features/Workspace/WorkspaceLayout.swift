@@ -200,7 +200,6 @@ private struct ControlPane: View {
             ))
             return ControlScrollGeometry(offset: offset, maximumOffset: maximum)
         } action: { _, geometry in
-            latestGeometry = geometry
             if restoringScroll {
                 if let target = restoringTarget,
                    geometry.maximumOffset >= target,
