@@ -221,7 +221,7 @@ public final class RowRepository {
         if let fault = testSessionReadFault {
             try fault()
         }
-        try storedWorkspaceSession()?.record
+        return try storedWorkspaceSession()?.record
     }
 
     /// Persist which project/piece/scroll-offset the user last had active.
