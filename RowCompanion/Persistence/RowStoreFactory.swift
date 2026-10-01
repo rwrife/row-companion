@@ -19,11 +19,15 @@ public enum RowStoreFactory {
 
     /// Current on-disk schema version stamped into every fresh store.
     /// v2 adds `StoredPatternDocument` + `StoredReferenceState` (issue #3).
-    public static let schemaVersion = 2
+    /// v4 adds `StoredShapingReminder` (issue #15). v3 is reserved for the
+    /// in-flight workspace-session model (issue #13); gaps are safe because
+    /// the reader gate only rejects *newer-than-known* stamps.
+    public static let schemaVersion = 4
 
     public static var schema: Schema {
         Schema([StoredProject.self, StoredPiece.self, StoredRowEvent.self, StoredStoreInfo.self,
-                StoredPatternDocument.self, StoredReferenceState.self])
+                StoredPatternDocument.self, StoredReferenceState.self,
+                StoredShapingReminder.self])
     }
 
     /// Local, non-mirrored configuration for the given store URL.

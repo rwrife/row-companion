@@ -162,6 +162,7 @@ private struct ControlPane: View {
     @State private var showCorrection = false
     @State private var correctionText = ""
     @State private var confirmCorrection = false
+    @State private var showReminderComposer = false
 
     var body: some View {
         ScrollView {
@@ -169,11 +170,22 @@ private struct ControlPane: View {
                 if let piece = model.selectedPiece {
                     ProgressReadout(piece: piece)
                     counterButtons
+                    if let notice = model.crossingNotice, !notice.isEmpty {
+                        Text(notice.summaryText)
+                            .font(.callout)
+                            .accessibilityIdentifier("reminder.crossingNotice")
+                    }
+                    if !model.remindersDueNextRow.isEmpty {
+                        Text("Due next row: " + model.remindersDueNextRow.map(\.instruction).joined(separator: " · "))
+                            .font(.headline)
+                            .accessibilityIdentifier("reminder.dueBanner")
+                    }
                     repeatPicker(piece: piece)
                     if model.referenceDocumentURL != nil {
                         guideSlider
                     }
                     notesEditor(piece: piece)
+                    remindersSection(piece: piece)
                 } else {
                     Text("Add a project and a piece to start counting.")
                         .font(.body)
@@ -278,6 +290,132 @@ private struct ControlPane: View {
             } message: {
                 Text("Set the completed-row count explicitly. Confirm to apply.")
             }
+        }
+    }
+
+    /// Piece-scoped shaping reminders (issue #15): durable instructions the
+    /// workspace shows when due. No notification permissions are requested —
+    /// due state is derived live from the durable row count and recomputed
+    /// after complete/undo/correction/repeat edits and relaunch.
+    private func remindersSection(piece: PieceRecord) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Shaping reminders")
+                .font(.headline)
+            if model.reminders.isEmpty {
+                Text("No reminders yet.")
+                    .foregroundStyle(.secondary)
+                    .accessibilityIdentifier("reminder.empty")
+            } else {
+                ForEach(model.reminders) { reminder in
+                    HStack(alignment: .firstTextBaseline) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(reminder.instruction)
+                            Text(ReminderRules.ruleDescription(for: reminder))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            // The milestone-reached state is persistent list
+                            // copy, deliberately distinct from the transient
+                            // next-row due banner above the counters.
+                            if model.remindersMilestoneReached.contains(reminder) {
+                                Text("Milestone reached")
+                                    .font(.caption)
+                                    .accessibilityIdentifier("reminder.reached")
+                            }
+                        }
+                        Spacer()
+                        Button("Remove") { model.removeReminder(id: reminder.id) }
+                            .accessibilityIdentifier("button.reminder.remove")
+                    }
+                    .accessibilityIdentifier("reminder.row.\(reminder.id.uuidString.prefix(8))")
+                }
+            }
+            Button("Add reminder…") { showReminderComposer = true }
+                .frame(minHeight: 44)
+                .accessibilityIdentifier("button.addReminder")
+        }
+        .sheet(isPresented: $showReminderComposer) {
+            ReminderComposer(isPresented: $showReminderComposer)
+        }
+    }
+}
+
+/// Sheet that authors one reminder. Start/end rows and the interval are
+/// free numeric fields validated by the pure `ReminderRules` on save —
+/// invalid values never reach disk and the sheet stays open with the
+/// server-side problem text.
+private struct ReminderComposer: View {
+    @Environment(WorkspaceModel.self) private var model
+    @Binding var isPresented: Bool
+    @State private var instruction = ""
+    @State private var cadence: Cadence = .once
+    @State private var startText = "1"
+    @State private var intervalText = "6"
+    @State private var endText = ""
+    @State private var validationMessage: String?
+
+    enum Cadence: Hashable {
+        case once
+        case everyRows
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                TextField("Instruction", text: $instruction)
+                    .accessibilityIdentifier("field.reminder.instruction")
+                Picker("Cadence", selection: $cadence) {
+                    Text("Once at row").tag(Cadence.once)
+                    Text("Every N rows").tag(Cadence.everyRows)
+                }
+                .accessibilityIdentifier("control.reminder.cadence")
+                TextField("Starting row", text: $startText)
+                    .keyboardType(.numberPad)
+                    .accessibilityIdentifier("field.reminder.startRow")
+                if cadence == .everyRows {
+                    TextField("Interval (rows)", text: $intervalText)
+                        .keyboardType(.numberPad)
+                        .accessibilityIdentifier("field.reminder.interval")
+                }
+                TextField("Last row (optional)", text: $endText)
+                    .keyboardType(.numberPad)
+                    .accessibilityIdentifier("field.reminder.endRow")
+                if let validationMessage {
+                    Text(validationMessage)
+                        .foregroundStyle(.red)
+                        .accessibilityIdentifier("reminder.validation")
+                }
+            }
+            .navigationTitle("New reminder")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { isPresented = false }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") { save() }
+                        .accessibilityIdentifier("button.reminder.save")
+                }
+            }
+        }
+    }
+
+    private func save() {
+        let interval = cadence == .everyRows ? Int(intervalText.trimmingCharacters(in: .whitespaces)) : nil
+        let endRow = Int(endText.trimmingCharacters(in: .whitespaces))
+        // Clear any unrelated prior error so the outcome of *this* save is
+        // the only thing inspected below.
+        model.lastError = nil
+        model.addReminder(
+            instruction: instruction,
+            interval: interval,
+            startRow: Int(startText.trimmingCharacters(in: .whitespaces)) ?? 0,
+            endRow: endRow
+        )
+        // Invalid reminders never reach disk; the sheet keeps the problem
+        // text so the maker can fix the field in place.
+        if let error = model.lastError {
+            validationMessage = error.userMessage
+        } else {
+            isPresented = false
         }
     }
 }
