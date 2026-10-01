@@ -200,6 +200,7 @@ private struct ControlPane: View {
             ))
             return ControlScrollGeometry(offset: offset, maximumOffset: maximum)
         } action: { _, geometry in
+            latestGeometry = geometry
             if restoringScroll {
                 if let target = restoringTarget,
                    geometry.maximumOffset >= target,
@@ -221,11 +222,28 @@ private struct ControlPane: View {
             restoringScroll = true
         }
         .task(id: model.selectedPieceID) {
-            let requested = model.controlScrollOffset
-            let target = max(0, requested)
+            let target = max(0, model.controlScrollOffset)
             restoringTarget = target
             restoringScroll = true
-            scrollPosition.scrollTo(y: target)
+            // A single scrollTo issued before the pane finishes laying out
+            // (document-dependent rows such as the reading guide load late)
+            // is clamped against not-yet-expanded content and silently lands
+            // at the top. Re-issue on a bounded cadence until the geometry
+            // gate in the scroll callback confirms the target has settled.
+            // If the content can never host the target (short pane, changed
+            // piece state), the loop expires and the callback resumes normal
+            // tracking, which re-syncs the model to the clamped real offset.
+            var attempts = 0
+            while restoringScroll && attempts < 40, !Task.isCancelled {
+                scrollPosition.scrollTo(y: target)
+                attempts += 1
+                do { try await Task.sleep(nanoseconds: 50_000_000) }
+                catch { break }
+            }
+            if restoringScroll {
+                restoringScroll = false
+                restoringTarget = nil
+            }
         }
     }
 
