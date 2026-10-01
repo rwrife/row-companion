@@ -219,4 +219,116 @@ final class RowCompanionUITests: XCTestCase {
         XCTAssertTrue(fullButton.waitForExistence(timeout: 5))
         XCTAssertTrue(fullButton.isEnabled, "both acknowledgements enable the full backup")
     }
+
+    /// Issue #13 resume journey: creates two projects with multiple pieces,
+    /// selects the second project + second piece, types notes, advances rows,
+    /// scrolls the control pane, then force-terminates and relaunches without
+    /// the reset argument. The app must resume into the same project, piece,
+    /// count, and substantial control-pane position without falling back to
+    /// the first item. Evidence boundary: simulator forced termination only;
+    /// lifecycle wiring is host-checked and physical device lock remains #6.
+    func testLastWorkspaceRestoresAcrossBackgroundAndRelaunch() {
+        createProject("First Project", piece: "P1", repeatLength: nil)
+
+        // Create second project through standard UI
+        app.buttons["menu.add"].tap()
+        XCTAssertTrue(app.buttons["menu.newProject"].waitForExistence(timeout: 5))
+        app.buttons["menu.newProject"].tap()
+        let projectTitle = app.textFields["field.projectTitle"]
+        XCTAssertTrue(projectTitle.waitForExistence(timeout: 5))
+        projectTitle.tap()
+        projectTitle.typeText("Second Project")
+        app.buttons["button.createProject"].tap()
+
+        // First piece of second project
+        app.buttons["menu.add"].tap()
+        XCTAssertTrue(app.buttons["menu.newPiece"].waitForExistence(timeout: 5))
+        app.buttons["menu.newPiece"].tap()
+        var pieceField = app.textFields["field.pieceName"]
+        XCTAssertTrue(pieceField.waitForExistence(timeout: 5))
+        pieceField.tap()
+        pieceField.typeText("First Piece")
+        app.buttons["button.addPiece"].tap()
+
+        // Second piece of second project
+        app.buttons["menu.add"].tap()
+        XCTAssertTrue(app.buttons["menu.newPiece"].waitForExistence(timeout: 5))
+        app.buttons["menu.newPiece"].tap()
+        pieceField = app.textFields["field.pieceName"]
+        XCTAssertTrue(pieceField.waitForExistence(timeout: 5))
+        pieceField.tap()
+        pieceField.typeText("Second Piece")
+        let repeatField = app.textFields["field.pieceRepeat"]
+        repeatField.tap()
+        repeatField.typeText("6")
+        app.buttons["button.addPiece"].tap()
+
+        let complete = app.buttons["control.completeRow"]
+        XCTAssertTrue(complete.waitForExistence(timeout: 5))
+        complete.tap()
+        complete.tap()
+        complete.tap()
+        let completed = app.staticTexts["row.completed"]
+        XCTAssertTrue(completed.waitForExistence(timeout: 5))
+        XCTAssertTrue(completed.label.contains("3"))
+
+        // Swipe the control pane up past the 44pt control height floor to
+        // establish a substantial, non-trivial scroll offset.
+        let controlsScroll = app.scrollViews["workspace.controlsScroll"]
+        XCTAssertTrue(controlsScroll.exists)
+        let notes = app.textViews["control.notes"]
+        XCTAssertTrue(notes.exists)
+        let notesFrameAtTop = notes.frame
+        controlsScroll.swipeUp()
+        XCTAssertTrue(notes.waitForExistence(timeout: 5))
+        XCTAssertTrue(notes.isHittable)
+        let notesFrameBefore = notes.frame
+        let scrolledDistance = notesFrameAtTop.minY - notesFrameBefore.minY
+        XCTAssertGreaterThan(scrolledDistance, 100,
+                             "swipe must establish a substantial scroll offset, got \(scrolledDistance)")
+
+        // Note: normal interaction saves the session; this test proves
+        // round-trip restoration of that session across forced termination.
+        // Direct scenePhase lifecycle save execution is independently verified
+        // by testSessionReadFailureNeverOverwritesPriorDurableSession and the
+        // test_lifecycle_and_scroll_restore_are_wired contract.
+        notes.tap()
+        notes.typeText("Resume notes for piece two")
+
+        // Relaunch without reset: the active session must restore the second
+        // project and second piece rather than defaulting to the first project.
+        app.launchArguments = []
+        app.terminate()
+        app.launch()
+
+        XCTAssertTrue(app.staticTexts["workspace.title"].waitForExistence(timeout: 15))
+
+        let projectPicker = app.buttons["control.project"]
+        XCTAssertTrue(projectPicker.waitForExistence(timeout: 10))
+        XCTAssertTrue(projectPicker.label.contains("Second Project"),
+                      "resumed project picker must name the project that was active, got \(projectPicker.label)")
+
+        let piecePicker = app.buttons["control.piece"]
+        XCTAssertTrue(piecePicker.exists)
+        XCTAssertTrue(piecePicker.label.contains("Second Piece"),
+                      "resumed piece picker must name the piece that was active, got \(piecePicker.label)")
+
+        XCTAssertTrue(app.staticTexts["row.completed"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["row.completed"].label.contains("3"),
+                      "resumed workspace must show piece two's count")
+        XCTAssertTrue(app.staticTexts["row.next"].label.contains("Next repeat row 4"),
+                      "resumed workspace must keep repeat arithmetic")
+        XCTAssertTrue(app.staticTexts["piece.name"].label.contains("Second Piece"),
+                      "resumed piece must be the one last active")
+
+        // The restored scroll position must preserve the scrolled location;
+        // a reset-to-top session would leave notesFrameAtTop.minY instead.
+        let notesAfterRelaunch = app.textViews["control.notes"]
+        XCTAssertTrue(notesAfterRelaunch.waitForExistence(timeout: 10))
+        XCTAssertTrue(notesAfterRelaunch.isHittable,
+                      "restored scroll position must keep the notes editor reachable")
+        let distanceFromTop = notesFrameAtTop.minY - notesAfterRelaunch.frame.minY
+        XCTAssertGreaterThan(distanceFromTop, 50,
+                             "restored pane must remain substantially scrolled, not reset to top")
+    }
 }

@@ -19,11 +19,13 @@ public enum RowStoreFactory {
 
     /// Current on-disk schema version stamped into every fresh store.
     /// v2 adds `StoredPatternDocument` + `StoredReferenceState` (issue #3).
-    public static let schemaVersion = 2
+    /// v3 adds `StoredWorkspaceSession` (issue #13).
+    public static let schemaVersion = 3
 
     public static var schema: Schema {
         Schema([StoredProject.self, StoredPiece.self, StoredRowEvent.self, StoredStoreInfo.self,
-                StoredPatternDocument.self, StoredReferenceState.self])
+                StoredPatternDocument.self, StoredReferenceState.self,
+                StoredWorkspaceSession.self])
     }
 
     /// Local, non-mirrored configuration for the given store URL.
@@ -53,6 +55,15 @@ public enum RowStoreFactory {
         if let info = existing.first {
             guard info.schemaVersion <= schemaVersion else {
                 throw RowRepositoryError.unsupportedSchemaVersion(found: info.schemaVersion)
+            }
+            // The ModelContainer above has already run the additive SwiftData
+            // migration (a v2 store gains the optional session table here).
+            // Restamp only after that succeeded, so an interrupted migration
+            // can never claim completion; a crash before this save just re-runs
+            // the same idempotent additive step on the next open.
+            if info.schemaVersion < schemaVersion {
+                info.schemaVersion = schemaVersion
+                try context.save()
             }
         } else {
             context.insert(StoredStoreInfo(schemaVersion: schemaVersion, createdAt: Date()))
