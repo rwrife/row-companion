@@ -85,6 +85,9 @@ public enum ReminderRules {
         guard completedRows >= reminder.startRow else { return false }
         guard withinEnd(reminder, atRow: completedRows) else { return false }
         guard let interval = reminder.interval else { return completedRows == reminder.startRow }
+        // A non-positive interval can only come from a tampered store; the
+        // reminder is inert rather than a division trap.
+        guard interval >= 1 else { return false }
         return (completedRows - reminder.startRow) % interval == 0
     }
 
@@ -111,6 +114,9 @@ public enum ReminderRules {
         let high = max(previousCompletedRows, newCompletedRows)
         var hits: [Int] = []
         if let interval = reminder.interval {
+            // A non-positive interval can only come from a tampered store;
+            // the reminder is inert rather than a division trap.
+            guard interval >= 1 else { return [] }
             // Fast-forward to the first milestone ≥ low instead of scanning
             // up to a million rows one by one.
             var row = max(low, reminder.startRow)
@@ -150,6 +156,7 @@ public enum ReminderRules {
         guard row >= reminder.startRow else { return false }
         guard withinEnd(reminder, atRow: row) else { return false }
         guard let interval = reminder.interval else { return row == reminder.startRow }
+        guard interval >= 1 else { return false } // tampered-store guard
         return (row - reminder.startRow) % interval == 0
     }
 
@@ -185,6 +192,10 @@ public struct ReminderCrossingNotice: Equatable, Sendable {
 
     public init(reminders: [ShapingReminderRecord], previousCompletedRows: Int, newCompletedRows: Int) {
         self.movedForward = newCompletedRows > previousCompletedRows
+        // Local copy of the direction: referencing the `movedForward`
+        // property inside the sort closure trips definite-initialization
+        // checking on the pinned Xcode 26.0.1 compiler.
+        let forward = newCompletedRows > previousCompletedRows
         var collected: [(row: Int, reminder: ShapingReminderRecord)] = []
         for reminder in reminders {
             for row in ReminderRules.crossedRows(reminder: reminder, from: previousCompletedRows, to: newCompletedRows) {
@@ -193,7 +204,7 @@ public struct ReminderCrossingNotice: Equatable, Sendable {
         }
         // Event order = the order milestone rows were passed in the actual
         // direction of movement.
-        collected.sort { movedForward ? $0.row < $1.row : $0.row > $1.row }
+        collected.sort { forward ? $0.row < $1.row : $0.row > $1.row }
         self.entries = collected.prefix(Self.displayCap).map { ReminderCrossingEntry(row: $0.row, instruction: $0.reminder.instruction) }
         self.hiddenCount = collected.count - self.entries.count
     }

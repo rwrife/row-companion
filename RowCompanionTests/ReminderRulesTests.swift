@@ -122,4 +122,24 @@ final class ReminderRulesTests: XCTestCase {
         XCTAssertEqual(ReminderRules.validationProblems(for: every(6, start: 10, end: 5)), ["End row cannot be before the starting row."])
         XCTAssertTrue(ReminderRules.validationProblems(for: every(6, start: 1, end: 1_000_000)).isEmpty)
     }
+
+    // MARK: - Tampered-store guards: non-positive intervals stay inert
+
+    func testNonPositiveIntervalRemindersAreInert() {
+        // A non-positive interval can only exist in a tampered store
+        // (validation rejects it at authoring time). Every rule surface
+        // must treat such a reminder as inert instead of trapping on
+        // division/modulo by zero or a negative divisor.
+        for tamperedInterval in [0, -6] {
+            var r = every(6, start: 4)
+            r.interval = tamperedInterval
+            XCTAssertFalse(ReminderRules.isDueNext(reminder: r, completedRows: 3))
+            XCTAssertFalse(ReminderRules.milestoneReached(reminder: r, completedRows: 4))
+            XCTAssertFalse(ReminderRules.milestoneReached(reminder: r, completedRows: 10))
+            XCTAssertEqual(ReminderRules.crossedRows(reminder: r, from: 0, to: 100), [])
+            XCTAssertEqual(ReminderRules.crossedRows(reminder: r, from: 100, to: 0), [])
+            let notice = ReminderCrossingNotice(reminders: [r], previousCompletedRows: 0, newCompletedRows: 50)
+            XCTAssertTrue(notice.isEmpty)
+        }
+    }
 }
