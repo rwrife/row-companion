@@ -11,6 +11,10 @@ public enum RowRepositoryError: Error, Equatable {
     case saveFailed(underlying: String)
     case unsupportedSchemaVersion(found: Int)
     case storeUnavailable(underlying: String)
+    /// A reminder as authored failed pure validation (issue #15); the
+    /// associated text is the human-readable problem list. Nothing durable
+    /// changed.
+    case reminderInvalid(String)
 }
 
 /// Local-first, transactional row repository.
