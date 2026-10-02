@@ -176,22 +176,28 @@ final class RowCompanionUITests: XCTestCase {
         correctionField.tap()
         clearNumberField(correctionField)
         correctionField.typeText("10")
-        // iOS 26's alert (TV-mac style) controller surfaces the SwiftUI
-        // Toggle with an automation type that `switches` does not match —
-        // query by identifier over any type instead.
-        let confirmToggle = app.alerts.descendants(matching: .any)
-            .matching(identifier: "toggle.confirmCorrection").firstMatch
-        XCTAssertTrue(confirmToggle.waitForExistence(timeout: 5))
-        confirmToggle.tap()
-        // Best-effort settle poll — the authoritative proof the toggle
-        // flipped is the domain gate: Apply only applies when confirmed, so
-        // the count landing on 10 below fails otherwise (the reducer throws
-        // correctionRequiresConfirmation and the count stays at 5).
-        var confirmProbe = 0
-        while !String(describing: confirmToggle.value).contains("1") && confirmProbe < 20 {
-            usleep(100_000)
-            confirmProbe += 1
+        // One-shot diagnostic: iOS 26's phone alert renders SwiftUI content
+        // inside _UIAlertControllerPhoneTVMacView; neither `switches` nor a
+        // plain identifier query matched the Toggle there (runs 37016262269,
+        // 37020117298 attempt 3). Dump the alert subtree so the CI log shows
+        // exactly how the confirmation control surfaces in the AX tree.
+        let alertSubtree = app.alerts.descendants(matching: .any)
+        for (i, el) in alertSubtree.allElementsBoundByIndex.prefix(40).enumerated() {
+            print("RC-ALERT-DUMP[\(i)] \(el.debugDescription)")
         }
+        // Match by identifier OR label over any automation type. The
+        // authoritative proof the toggle flipped is the domain gate: Apply
+        // only applies when confirmed (the reducer throws
+        // correctionRequiresConfirmation otherwise and the count below
+        // stays at 5), so no reliance on `.value` from an `.any` element.
+        let confirmToggle = app.alerts.descendants(matching: .any)
+            .matching(NSPredicate(format: "identifier == %@ OR label CONTAINS %@",
+                                  "toggle.confirmCorrection", "Confirm change"))
+            .firstMatch
+        XCTAssertTrue(confirmToggle.waitForExistence(timeout: 5),
+                      "confirmation control must exist (see RC-ALERT-DUMP lines)")
+        confirmToggle.tap()
+        Thread.sleep(forTimeInterval: 0.5)
         app.alerts.buttons["Apply"].tap()
         let corrected = app.staticTexts["row.completed"]
         XCTAssertTrue(corrected.waitForExistence(timeout: 5))
