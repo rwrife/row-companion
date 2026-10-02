@@ -49,7 +49,7 @@ final class ReminderPersistenceTests: XCTestCase {
             XCTAssertThrowsError(
                 try repo.addReminder(to: piece.id, instruction: instruction, interval: interval, startRow: start, endRow: end)
             ) { error in
-                guard case RowRepositoryError.reminderInvalid = error as? RowRepositoryError else {
+                guard case RowRepositoryError.reminderInvalid? = error as? RowRepositoryError else {
                     return XCTFail("expected reminderInvalid, got \(error)")
                 }
             }
@@ -65,7 +65,7 @@ final class ReminderPersistenceTests: XCTestCase {
         XCTAssertThrowsError(
             try repo.addReminder(to: UUID(), instruction: "ok", interval: nil, startRow: 1)
         ) { error in
-            guard case RowRepositoryError.pieceNotFound = error as? RowRepositoryError else {
+            guard case RowRepositoryError.pieceNotFound? = error as? RowRepositoryError else {
                 return XCTFail("expected pieceNotFound, got \(error)")
             }
         }
