@@ -282,6 +282,7 @@ private struct ControlPane: View {
                 TextField("Rows completed", text: $correctionText)
                     .keyboardType(.numberPad)
                 Toggle("Confirm change", isOn: $confirmCorrection)
+                    .accessibilityIdentifier("toggle.confirmCorrection")
                 Button("Apply") {
                     model.correctCount(to: Int(correctionText) ?? -1, confirmed: confirmCorrection)
                     confirmCorrection = false
@@ -326,7 +327,10 @@ private struct ControlPane: View {
                         Button("Remove") { model.removeReminder(id: reminder.id) }
                             .accessibilityIdentifier("button.reminder.remove")
                     }
-                    .accessibilityIdentifier("reminder.row.\(reminder.id.uuidString.prefix(8))")
+                    // NOTE: no accessibilityIdentifier on this row container —
+                    // an identifier on a multi-element row overwrites the child
+                    // identifiers in the AX tree (the badge/button queries would
+                    // then never resolve). Identify children individually.
                 }
             }
             Button("Add reminder…") { showReminderComposer = true }

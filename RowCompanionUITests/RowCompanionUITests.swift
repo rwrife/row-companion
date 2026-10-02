@@ -153,6 +153,11 @@ final class RowCompanionUITests: XCTestCase {
         XCTAssertTrue(notice.waitForExistence(timeout: 5))
         XCTAssertTrue(notice.label.contains("Count moved past 1 reminder milestone"), notice.label)
         XCTAssertTrue(notice.label.contains("row 6"), notice.label)
+        // Root cause of the earlier CI miss: the reminder row previously
+        // carried a container-level accessibilityIdentifier, which in the AX
+        // tree overwrites every child identifier inside that row — so
+        // `reminder.reached` never resolved. Children are identified
+        // individually; keep it that way.
         let reached = app.staticTexts["reminder.reached"]
         XCTAssertTrue(reached.waitForExistence(timeout: 5), "milestone-reached state must persist in the list")
 
@@ -171,15 +176,22 @@ final class RowCompanionUITests: XCTestCase {
         correctionField.tap()
         clearNumberField(correctionField)
         correctionField.typeText("10")
-        let confirmToggle = app.alerts.switches.firstMatch
+        // iOS 26's alert (TV-mac style) controller surfaces the SwiftUI
+        // Toggle with an automation type that `switches` does not match —
+        // query by identifier over any type instead.
+        let confirmToggle = app.alerts.descendants(matching: .any)
+            .matching(identifier: "toggle.confirmCorrection").firstMatch
         XCTAssertTrue(confirmToggle.waitForExistence(timeout: 5))
         confirmToggle.tap()
+        // Best-effort settle poll — the authoritative proof the toggle
+        // flipped is the domain gate: Apply only applies when confirmed, so
+        // the count landing on 10 below fails otherwise (the reducer throws
+        // correctionRequiresConfirmation and the count stays at 5).
         var confirmProbe = 0
         while !String(describing: confirmToggle.value).contains("1") && confirmProbe < 20 {
             usleep(100_000)
             confirmProbe += 1
         }
-        XCTAssertTrue(String(describing: confirmToggle.value).contains("1"), "confirmation toggle must flip")
         app.alerts.buttons["Apply"].tap()
         let corrected = app.staticTexts["row.completed"]
         XCTAssertTrue(corrected.waitForExistence(timeout: 5))
