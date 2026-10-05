@@ -170,23 +170,23 @@ final class RowCompanionUITests: XCTestCase {
         XCTAssertTrue(notice.label.contains("Count moved back over"), notice.label)
 
         // A correction that jumps past the milestone crosses it too.
+        // Cancel must leave the durable count untouched; reopening requires
+        // a distinct destructive confirmation before any event is recorded.
+        app.buttons["control.correct"].tap()
+        XCTAssertTrue(app.alerts.textFields.firstMatch.waitForExistence(timeout: 5))
+        app.buttons["Cancel"].firstMatch.tap()
+        let beforeCorrection = app.staticTexts["row.completed"]
+        XCTAssertTrue(beforeCorrection.label.contains("5"), beforeCorrection.label)
         app.buttons["control.correct"].tap()
         let correctionField = app.alerts.textFields.firstMatch
         XCTAssertTrue(correctionField.waitForExistence(timeout: 5))
         correctionField.tap()
         clearNumberField(correctionField)
         correctionField.typeText("10")
-        // The pinned iOS 26 alert subtree exposes the confirmation as a
-        // Button, not a Switch (run 37036622306). Find by its leaf identifier.
-        // The correction reducer requires confirmation; the resulting count
-        // below proves the tap changed state without relying on AX `.value`.
-        let confirmToggle = app.buttons["toggle.confirmCorrection"].firstMatch
-        XCTAssertTrue(confirmToggle.waitForExistence(timeout: 5))
-        confirmToggle.tap()
-        // Re-query at the application level: the alert-specific query can
-        // lose its Alert ancestor after the SwiftUI Toggle re-renders, even
-        // while the Apply button remains present in the accessibility tree.
-        let apply = app.buttons["Apply"].firstMatch
+        // Confirm through the explicit destructive alert action. On the
+        // pinned iOS 26 simulator an embedded Toggle dismisses its alert
+        // instead of retaining it; the action is the sole confirmation gate.
+        let apply = app.buttons["control.applyCorrection"].firstMatch
         XCTAssertTrue(apply.waitForExistence(timeout: 5))
         apply.tap()
         let corrected = app.staticTexts["row.completed"]

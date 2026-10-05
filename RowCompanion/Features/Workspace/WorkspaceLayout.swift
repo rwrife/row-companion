@@ -161,7 +161,6 @@ private struct ControlPane: View {
     @Environment(WorkspaceModel.self) private var model
     @State private var showCorrection = false
     @State private var correctionText = ""
-    @State private var confirmCorrection = false
     @State private var showReminderComposer = false
 
     var body: some View {
@@ -281,15 +280,16 @@ private struct ControlPane: View {
             .alert("Correct count", isPresented: $showCorrection) {
                 TextField("Rows completed", text: $correctionText)
                     .keyboardType(.numberPad)
-                Toggle("Confirm change", isOn: $confirmCorrection)
-                    .accessibilityIdentifier("toggle.confirmCorrection")
-                Button("Apply") {
-                    model.correctCount(to: Int(correctionText) ?? -1, confirmed: confirmCorrection)
-                    confirmCorrection = false
+                Button("Apply correction", role: .destructive) {
+                    // This explicitly labelled alert action is the user's
+                    // confirmation. A Toggle inside an iOS 26 alert dismisses
+                    // the alert on tap, leaving Apply unreachable.
+                    model.correctCount(to: Int(correctionText) ?? -1, confirmed: true)
                 }
-                Button("Cancel", role: .cancel) { confirmCorrection = false }
+                .accessibilityIdentifier("control.applyCorrection")
+                Button("Cancel", role: .cancel) { }
             } message: {
-                Text("Set the completed-row count explicitly. Confirm to apply.")
+                Text("Replace the completed-row count? This records a correction in the piece history; Cancel keeps the current count.")
             }
         }
     }
