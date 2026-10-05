@@ -174,6 +174,7 @@ private struct GuideReader: View {
 
 private struct ControlPane: View {
     @Environment(WorkspaceModel.self) private var model
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var showCorrection = false
     @State private var correctionText = ""
     @State private var showReminderComposer = false
@@ -241,27 +242,47 @@ private struct ControlPane: View {
     }
 
     private var counterButtons: some View {
-        HStack(spacing: 16) {
-            Button {
-                model.completeRow()
-            } label: {
-                Text("Complete row")
-                    .font(.headline)
-                    .frame(maxWidth: .infinity, minHeight: 44)
+        Group {
+            if dynamicTypeSize.isAccessibilitySize {
+                // A side-by-side pair narrows each target to half the phone;
+                // at AX5 its wrapped title makes a button ~279 pt tall while
+                // the control viewport may be only ~192 pt. Full-width
+                // stacked buttons keep both labels and targets reachable.
+                VStack(spacing: 12) {
+                    completeRowButton
+                    undoRowButton
+                }
+            } else {
+                HStack(spacing: 16) {
+                    completeRowButton
+                    undoRowButton
+                }
             }
-            .buttonStyle(.borderedProminent)
-            .accessibilityIdentifier("control.completeRow")
-
-            Button {
-                model.undoRow()
-            } label: {
-                Text("Undo")
-                    .frame(maxWidth: .infinity, minHeight: 44)
-            }
-            .buttonStyle(.bordered)
-            .accessibilityIdentifier("control.undo")
         }
         .controlSize(.large)
+    }
+
+    private var completeRowButton: some View {
+        Button {
+            model.completeRow()
+        } label: {
+            Text("Complete row")
+                .font(.headline)
+                .frame(maxWidth: .infinity, minHeight: 44)
+        }
+        .buttonStyle(.borderedProminent)
+        .accessibilityIdentifier("control.completeRow")
+    }
+
+    private var undoRowButton: some View {
+        Button {
+            model.undoRow()
+        } label: {
+            Text("Undo")
+                .frame(maxWidth: .infinity, minHeight: 44)
+        }
+        .buttonStyle(.bordered)
+        .accessibilityIdentifier("control.undo")
     }
 
     private func repeatPicker(piece: PieceRecord) -> some View {
