@@ -67,6 +67,16 @@ public final class WorkspaceModel {
     /// sheet before anything becomes durable.
     public private(set) var restorePreview: BackupService.RestorePreview?
 
+    /// Durable shaping reminders for the selected piece (issue #15), kept in
+    /// creation order. Read-only from the UI; mutations go through
+    /// `addReminder` / `removeReminder`.
+    public private(set) var reminders: [ShapingReminderRecord] = []
+    /// Milestones the last completed row action crossed, most-recent first,
+    /// shown as a one-shot notice until the next row action replaces it.
+    /// Recomputed from durable counts only, so it survives relaunch by being
+    /// regenerated on the next action — never stored, never a count input.
+    public private(set) var crossingNotice: ReminderCrossingNotice?
+
     public let backups: BackupService
 
     public init(repository: RowRepository) {
@@ -99,7 +109,22 @@ public final class WorkspaceModel {
     private func selectPieceKeepState(_ id: UUID?) {
         selectedPieceID = id
         loadReference()
+        loadReminders()
         refreshStatus()
+    }
+
+    /// Reminder reads can never touch counts; a failed read simply shows an
+    /// empty reminder set rather than corrupting the workspace.
+    private func loadReminders() {
+        guard let pieceID = selectedPieceID else {
+            reminders = []
+            return
+        }
+        do {
+            reminders = try repository.reminders(for: pieceID)
+        } catch {
+            reminders = []
+        }
     }
 
     // MARK: - Mutation (each write goes through the durable repository)
@@ -155,9 +180,19 @@ public final class WorkspaceModel {
             lastError = .noPieceSelected
             return
         }
+        let beforeRows = pieces.first(where: { $0.id == pieceID })?.completedRows
         do {
             _ = try repository.apply(action, to: pieceID)
             reload(keepReference: true)
+            if let beforeRows,
+               let afterRows = pieces.first(where: { $0.id == pieceID })?.completedRows,
+               beforeRows != afterRows {
+                crossingNotice = ReminderCrossingNotice(
+                    reminders: reminders,
+                    previousCompletedRows: beforeRows,
+                    newCompletedRows: afterRows
+                )
+            }
             refreshStatus()
         } catch let error as RowDomainError {
             lastError = .rowDomainFailed(error)
@@ -165,6 +200,59 @@ public final class WorkspaceModel {
         } catch {
             lastError = .rowActionFailed(error as? RowRepositoryError ?? .storeUnavailable(underlying: String(describing: error)))
             reload(keepReference: true)
+        }
+    }
+
+    // MARK: - Shaping reminders (issue #15)
+
+    /// Instructions for the *next row to work* — deliberately separate from
+    /// milestones the last completed row reached, so the maker can tell
+    /// "do this next" apart from "you just hit that".
+    public var remindersDueNextRow: [ShapingReminderRecord] {
+        guard let rows = selectedPiece?.completedRows else { return [] }
+        return reminders.filter { ReminderRules.isDueNext(reminder: $0, completedRows: rows) }
+    }
+
+    /// Milestones the current completed-row count itself sits on.
+    public var remindersMilestoneReached: [ShapingReminderRecord] {
+        guard let rows = selectedPiece?.completedRows else { return [] }
+        return reminders.filter { ReminderRules.milestoneReached(reminder: $0, completedRows: rows) }
+    }
+
+    public func addReminder(instruction: String, interval: Int?, startRow: Int, endRow: Int?) {
+        guard let pieceID = selectedPieceID else {
+            lastError = .noPieceSelected
+            return
+        }
+        do {
+            _ = try repository.addReminder(
+                to: pieceID,
+                instruction: instruction,
+                interval: interval,
+                startRow: startRow,
+                endRow: endRow
+            )
+            loadReminders()
+        } catch let error as RowRepositoryError {
+            if case .reminderInvalid(let problems) = error {
+                lastError = .other(problems)
+            } else {
+                reportPersist(error)
+            }
+            loadReminders()
+        } catch {
+            reportPersist(error)
+            loadReminders()
+        }
+    }
+
+    public func removeReminder(id reminderID: UUID) {
+        do {
+            try repository.removeReminder(id: reminderID)
+            loadReminders()
+        } catch {
+            reportPersist(error)
+            loadReminders()
         }
     }
 

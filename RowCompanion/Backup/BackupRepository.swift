@@ -159,7 +159,8 @@ extension RowRepository {
     }
 
     /// Delete one project completely: its pieces, row events, documents
-    /// (records + app-owned PDF copies), and reference states. Only files
+    /// (records + app-owned PDF copies), reference states, and shaping
+    /// reminders. Only files
     /// that live *inside* this store's generated document directory and are
     /// named by stored records are removed — user-exported files, OS
     /// backups, and anything outside the app-owned directory are untouched.
@@ -199,8 +200,10 @@ extension RowRepository {
             return url.path.hasPrefix(documentsDir + "/") ? url : nil
         }
 
+        let reminders = try storedReminders(pieceIDs: pieceIDs)
         for object in events { context.delete(object) }
         for object in references { context.delete(object) }
+        for object in reminders { context.delete(object) }
         for object in documents { context.delete(object) }
         for object in pieces { context.delete(object) }
         context.delete(project)
