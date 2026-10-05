@@ -176,29 +176,19 @@ final class RowCompanionUITests: XCTestCase {
         correctionField.tap()
         clearNumberField(correctionField)
         correctionField.typeText("10")
-        // One-shot diagnostic: iOS 26's phone alert renders SwiftUI content
-        // inside _UIAlertControllerPhoneTVMacView; neither `switches` nor a
-        // plain identifier query matched the Toggle there (runs 37016262269,
-        // 37020117298 attempt 3). Dump the alert subtree so the CI log shows
-        // exactly how the confirmation control surfaces in the AX tree.
-        let alertSubtree = app.alerts.descendants(matching: .any)
-        for (i, el) in alertSubtree.allElementsBoundByIndex.prefix(40).enumerated() {
-            print("RC-ALERT-DUMP[\(i)] \(el.debugDescription)")
-        }
-        // Match by identifier OR label over any automation type. The
-        // authoritative proof the toggle flipped is the domain gate: Apply
-        // only applies when confirmed (the reducer throws
-        // correctionRequiresConfirmation otherwise and the count below
-        // stays at 5), so no reliance on `.value` from an `.any` element.
-        let confirmToggle = app.alerts.descendants(matching: .any)
-            .matching(NSPredicate(format: "identifier == %@ OR label CONTAINS %@",
-                                  "toggle.confirmCorrection", "Confirm change"))
-            .firstMatch
-        XCTAssertTrue(confirmToggle.waitForExistence(timeout: 5),
-                      "confirmation control must exist (see RC-ALERT-DUMP lines)")
+        // The pinned iOS 26 alert subtree exposes the confirmation as a
+        // Button, not a Switch (run 37036622306). Find by its leaf identifier.
+        // The correction reducer requires confirmation; the resulting count
+        // below proves the tap changed state without relying on AX `.value`.
+        let confirmToggle = app.buttons["toggle.confirmCorrection"].firstMatch
+        XCTAssertTrue(confirmToggle.waitForExistence(timeout: 5))
         confirmToggle.tap()
-        Thread.sleep(forTimeInterval: 0.5)
-        app.alerts.buttons["Apply"].tap()
+        // Re-query at the application level: the alert-specific query can
+        // lose its Alert ancestor after the SwiftUI Toggle re-renders, even
+        // while the Apply button remains present in the accessibility tree.
+        let apply = app.buttons["Apply"].firstMatch
+        XCTAssertTrue(apply.waitForExistence(timeout: 5))
+        apply.tap()
         let corrected = app.staticTexts["row.completed"]
         XCTAssertTrue(corrected.waitForExistence(timeout: 5))
         XCTAssertTrue(corrected.label.contains("10"), corrected.label)
