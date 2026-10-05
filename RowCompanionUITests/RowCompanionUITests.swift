@@ -105,6 +105,117 @@ final class RowCompanionUITests: XCTestCase {
         XCTAssertEqual(app.state, .runningForeground)
     }
 
+    /// Issue #15 journey: author a durable shaping reminder, watch the
+    /// next-row due banner appear while it is due, cross its milestone with a
+    /// completing row (crossing notice), see due state recompute after undo,
+    /// survive a correction and a relaunch — all with no notification
+    /// permission (due state derives from the durable count, never timers).
+    func testShapingReminderDueBannerCrossingAndRelaunch() {
+        createProject("Reminder Scarf", piece: "Body", repeatLength: nil)
+
+        // Author: default cadence is the most common case — one-shot at a
+        // row. The reminder lives at the bottom of the control pane.
+        let addReminder = app.buttons["button.addReminder"]
+        var scrollAttempts = 0
+        while !addReminder.isHittable && scrollAttempts < 8 {
+            app.swipeUp()
+            scrollAttempts += 1
+        }
+        XCTAssertTrue(addReminder.isHittable, "Add reminder control must be reachable by scrolling")
+        addReminder.tap()
+
+        let instructionField = app.textFields["field.reminder.instruction"]
+        XCTAssertTrue(instructionField.waitForExistence(timeout: 5))
+        instructionField.tap()
+        instructionField.typeText("Begin shaping")
+        let startField = app.textFields["field.reminder.startRow"]
+        XCTAssertTrue(startField.waitForExistence(timeout: 5))
+        startField.tap()
+        clearNumberField(startField)
+        startField.typeText("6")
+        app.buttons["button.reminder.save"].tap()
+
+        let reminderRow = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Begin shaping")).firstMatch
+        XCTAssertTrue(reminderRow.waitForExistence(timeout: 5), "saved reminder must list in the pane")
+
+        // n=5 => next row 6 => due.
+        let complete = app.buttons["control.completeRow"]
+        XCTAssertTrue(complete.waitForExistence(timeout: 5))
+        for _ in 0..<5 { complete.tap() }
+        let dueBanner = app.staticTexts["reminder.dueBanner"]
+        XCTAssertTrue(dueBanner.waitForExistence(timeout: 5), "reminder must show as due for the next row")
+        XCTAssertTrue(dueBanner.label.contains("Begin shaping"), dueBanner.label)
+
+        // Row 6 completes: milestone crossed, due banner retires, the
+        // one-shot crossing notice names the milestone it passed.
+        complete.tap()
+        let notice = app.staticTexts["reminder.crossingNotice"]
+        XCTAssertTrue(notice.waitForExistence(timeout: 5))
+        XCTAssertTrue(notice.label.contains("Count moved past 1 reminder milestone"), notice.label)
+        XCTAssertTrue(notice.label.contains("row 6"), notice.label)
+        // Root cause of the earlier CI miss: the reminder row previously
+        // carried a container-level accessibilityIdentifier, which in the AX
+        // tree overwrites every child identifier inside that row — so
+        // `reminder.reached` never resolved. Children are identified
+        // individually; keep it that way.
+        let reached = app.staticTexts["reminder.reached"]
+        XCTAssertTrue(reached.waitForExistence(timeout: 5), "milestone-reached state must persist in the list")
+
+        // Undo recomputes everything from durable counts: row 6 is no longer
+        // completed, so the reminder is due again and the notice flips to
+        // the backward direction.
+        app.buttons["control.undo"].tap()
+        XCTAssertTrue(dueBanner.waitForExistence(timeout: 5), "undo must re-derive the due state")
+        XCTAssertTrue(dueBanner.label.contains("Begin shaping"), dueBanner.label)
+        XCTAssertTrue(notice.label.contains("Count moved back over"), notice.label)
+
+        // A correction that jumps past the milestone crosses it too.
+        // Cancel must leave the durable count untouched; reopening requires
+        // a distinct destructive confirmation before any event is recorded.
+        app.buttons["control.correct"].tap()
+        XCTAssertTrue(app.alerts.textFields.firstMatch.waitForExistence(timeout: 5))
+        app.buttons["Cancel"].firstMatch.tap()
+        let beforeCorrection = app.staticTexts["row.completed"]
+        XCTAssertTrue(beforeCorrection.label.contains("5"), beforeCorrection.label)
+        app.buttons["control.correct"].tap()
+        let correctionField = app.alerts.textFields.firstMatch
+        XCTAssertTrue(correctionField.waitForExistence(timeout: 5))
+        correctionField.tap()
+        clearNumberField(correctionField)
+        correctionField.typeText("10")
+        // Confirm through the explicit destructive alert action. On the
+        // pinned iOS 26 simulator an embedded Toggle dismisses its alert
+        // instead of retaining it; the action is the sole confirmation gate.
+        let apply = app.buttons["control.applyCorrection"].firstMatch
+        XCTAssertTrue(apply.waitForExistence(timeout: 5))
+        apply.tap()
+        let corrected = app.staticTexts["row.completed"]
+        XCTAssertTrue(corrected.waitForExistence(timeout: 5))
+        XCTAssertTrue(corrected.label.contains("10"), corrected.label)
+        XCTAssertTrue(notice.label.contains("Count moved past 1 reminder milestone"), notice.label)
+
+        // Relaunch: reminders are durable; due/reached state re-derives from
+        // the count (n=10, past the one-shot row 6 — not due, not reached).
+        app.launchArguments = []
+        app.terminate()
+        app.launch()
+        XCTAssertTrue(app.staticTexts["row.completed"].waitForExistence(timeout: 15))
+        let survived = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Begin shaping")).firstMatch
+        var rescroll = 0
+        while !survived.isHittable && rescroll < 8 {
+            app.swipeUp()
+            rescroll += 1
+        }
+        XCTAssertTrue(survived.exists, "reminder must survive relaunch")
+        XCTAssertFalse(app.staticTexts["reminder.dueBanner"].exists, "past its row, the one-shot reminder must not show due")
+    }
+
+    /// Clears a number-pad field whose text is pre-filled.
+    private func clearNumberField(_ field: XCUIElement) {
+        let length = (field.value as? String)?.count ?? 0
+        for _ in 0..<length { field.typeText("\u{8}") }
+    }
+
     /// Issue #4 accessibility evidence: completed rows and the next repeat
     /// row are separate, explicitly-labelled elements — the exact strings a
     /// VoiceOver user hears (`label` is what assistive tech reads), never a

@@ -221,6 +221,24 @@ final class ReferenceStateTests: XCTestCase {
         XCTAssertEqual(model2.controlScrollOffset, 0, "negative scroll offset must normalize to 0")
     }
 
+    /// Session restore and reminders shipped on separate branches; opening a
+    /// saved piece must hydrate its reminders as well as its reference state.
+    func testSessionRestoreHydratesPieceReminders() throws {
+        let repo = try RowRepository(storeURL: storeURL)
+        let project = try repo.createProject(title: "Sock")
+        let piece = try repo.addPiece(to: project.id, name: "heel")
+        let reminder = try repo.addReminder(to: piece.id, instruction: "Turn heel", interval: nil, startRow: 6)
+        try repo.saveWorkspaceSession(WorkspaceSessionRecord(
+            selectedProjectID: project.id, selectedPieceID: piece.id, controlScrollOffset: 0
+        ))
+
+        let reopened = try RowRepository.open(storeURL: storeURL)
+        let model = WorkspaceModel(repository: reopened)
+        XCTAssertEqual(model.selectedPieceID, piece.id)
+        XCTAssertEqual(model.reminders.map(\.id), [reminder.id])
+        XCTAssertEqual(try reopened.piece(piece.id).completedRows, 0)
+    }
+
     /// A transient session-read failure must inhibit every later persistence
     /// path in that model instance (geometry, selection, lifecycle capture),
     /// preserving the prior durable record rather than saving fallback state.
