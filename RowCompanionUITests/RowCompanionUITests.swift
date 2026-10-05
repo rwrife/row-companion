@@ -405,15 +405,19 @@ final class RowCompanionUITests: XCTestCase {
         // wraps. Bound the loop so a layout regression still fails promptly.
         let controlsScroll = app.scrollViews["workspace.controlsScroll"]
         XCTAssertTrue(controlsScroll.exists)
-        // The prior run's diagnostic showed repeated swipeUp() could push an
-        // already-visible control off the TOP edge (button.maxY < scroll.minY)
-        // and keep swiping the wrong way; scroll toward the button instead.
+        // Use short drags rather than full-page swipes: AX5 makes each
+        // control very tall, and full swipes can jump completely past it.
+        // The compact reference cap reserves enough viewport height for the
+        // control to be visible; the drag only changes its position.
+        XCTAssertGreaterThan(controlsScroll.frame.height, complete.frame.height,
+                             "control viewport must fit an AX-sized button")
         for _ in 0..<12 where !complete.isHittable {
-            if complete.frame.maxY < controlsScroll.frame.minY {
-                controlsScroll.swipeDown()
-            } else {
-                controlsScroll.swipeUp()
-            }
+            let above = complete.frame.maxY < controlsScroll.frame.minY
+            let start = controlsScroll.coordinate(withNormalizedOffset:
+                CGVector(dx: 0.5, dy: above ? 0.35 : 0.7))
+            let end = controlsScroll.coordinate(withNormalizedOffset:
+                CGVector(dx: 0.5, dy: above ? 0.65 : 0.4))
+            start.press(forDuration: 0.05, thenDragTo: end)
         }
         XCTAssertTrue(
             complete.isHittable,

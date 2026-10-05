@@ -48,9 +48,17 @@ struct WorkspaceLayout: View {
 
 /// Compact phone: readable reference above, reachable controls below.
 private struct CompactWorkspace: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
     var body: some View {
         VStack(spacing: 12) {
             ReferencePane()
+                // At AX sizes the empty/PDF reference's flexible height can
+                // consume almost the whole phone, leaving a control viewport
+                // shorter than the enlarged Complete/Undo buttons. Reserve
+                // room for the independent scrollable controls while keeping
+                // the reference visible and its document viewport intact.
+                .frame(maxHeight: dynamicTypeSize.isAccessibilitySize ? 220 : .infinity)
             ControlPane()
         }
         .padding(.horizontal)
