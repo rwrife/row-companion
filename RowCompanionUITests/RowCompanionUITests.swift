@@ -105,6 +105,67 @@ final class RowCompanionUITests: XCTestCase {
         XCTAssertEqual(app.state, .runningForeground)
     }
 
+    /// Issue #18 journey: create checkpoint, complete more rows, verify
+    /// chronological row history, return to checkpoint via confirmed
+    /// correction event, survive relaunch.
+    func testRowHistoryAndProgressCheckpointLifecycle() {
+        createProject("Checkpoint Scarf", piece: "Body", repeatLength: "8")
+        let complete = app.buttons["control.completeRow"]
+        XCTAssertTrue(complete.waitForExistence(timeout: 5))
+        for _ in 0..<4 { complete.tap() }
+
+        // Save a checkpoint at row 4
+        let addCheckpoint = app.buttons["button.addCheckpoint"]
+        var scrollAttempts = 0
+        while !addCheckpoint.isHittable && scrollAttempts < 8 {
+            app.swipeUp()
+            scrollAttempts += 1
+        }
+        XCTAssertTrue(addCheckpoint.isHittable)
+        addCheckpoint.tap()
+        let nameField = app.textFields["field.checkpoint.name"]
+        XCTAssertTrue(nameField.waitForExistence(timeout: 5))
+        nameField.tap()
+        nameField.typeText("Finished ribbing")
+        app.buttons["button.checkpoint.save"].tap()
+
+        // Advance to row 7
+        for _ in 0..<3 { complete.tap() }
+        let completed = app.staticTexts["row.completed"]
+        XCTAssertTrue(completed.label.contains("7"))
+
+        // Check history
+        let showHistory = app.buttons["button.showHistory"]
+        scrollAttempts = 0
+        while !showHistory.isHittable && scrollAttempts < 8 {
+            app.swipeUp()
+            scrollAttempts += 1
+        }
+        showHistory.tap()
+        XCTAssertTrue(app.staticTexts["history.timeline"].waitForExistence(timeout: 5))
+        app.buttons["Done"].tap()
+
+        // Return to checkpoint (confirmed correction)
+        let restoreButton = app.buttons["button.checkpoint.restore"]
+        scrollAttempts = 0
+        while !restoreButton.isHittable && scrollAttempts < 8 {
+            app.swipeUp()
+            scrollAttempts += 1
+        }
+        restoreButton.tap()
+        XCTAssertTrue(app.buttons["button.confirmRestoreCheckpoint"].waitForExistence(timeout: 5))
+        app.buttons["button.confirmRestoreCheckpoint"].tap()
+        XCTAssertTrue(completed.waitForExistence(timeout: 5))
+        XCTAssertTrue(completed.label.contains("4"))
+
+        // Relaunch
+        app.launchArguments = []
+        app.terminate()
+        app.launch()
+        XCTAssertTrue(completed.waitForExistence(timeout: 15))
+        XCTAssertTrue(completed.label.contains("4"))
+    }
+
     /// Issue #15 journey: author a durable shaping reminder, watch the
     /// next-row due banner appear while it is due, cross its milestone with a
     /// completing row (crossing notice), see due state recompute after undo,

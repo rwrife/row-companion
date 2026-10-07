@@ -143,6 +143,15 @@ public enum BackupFormat {
         public var guideY: Double?
     }
 
+    public struct CheckpointSnapshot: Codable, Equatable, Sendable {
+        public var id: UUID
+        public var pieceID: UUID
+        public var name: String
+        public var completedRows: Int
+        public var repeatLength: Int?
+        public var createdAt: Date
+    }
+
     /// The versioned manifest written at export time.
     public struct Manifest: Codable, Equatable, Sendable {
         public var schemaVersion: Int
@@ -153,6 +162,24 @@ public enum BackupFormat {
         public var events: [EventSnapshot]
         public var documents: [DocumentSnapshot]
         public var references: [ReferenceSnapshot]
+        public var checkpoints: [CheckpointSnapshot]
+
+        enum CodingKeys: String, CodingKey {
+            case schemaVersion, createdAt, includesOriginals, project, pieces, events, documents, references, checkpoints
+        }
+
+        public init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            schemaVersion = try container.decode(Int.self, forKey: .schemaVersion)
+            createdAt = try container.decode(Date.self, forKey: .createdAt)
+            includesOriginals = try container.decode(Bool.self, forKey: .includesOriginals)
+            project = try container.decode(ProjectSnapshot.self, forKey: .project)
+            pieces = try container.decode([PieceSnapshot].self, forKey: .pieces)
+            events = try container.decode([EventSnapshot].self, forKey: .events)
+            documents = try container.decode([DocumentSnapshot].self, forKey: .documents)
+            references = try container.decode([ReferenceSnapshot].self, forKey: .references)
+            checkpoints = try container.decodeIfPresent([CheckpointSnapshot].self, forKey: .checkpoints) ?? []
+        }
 
         public init(
             schemaVersion: Int = BackupFormat.schemaVersion,
@@ -162,7 +189,8 @@ public enum BackupFormat {
             pieces: [PieceSnapshot],
             events: [EventSnapshot],
             documents: [DocumentSnapshot],
-            references: [ReferenceSnapshot]
+            references: [ReferenceSnapshot],
+            checkpoints: [CheckpointSnapshot] = []
         ) {
             self.schemaVersion = schemaVersion
             self.createdAt = createdAt
@@ -172,6 +200,7 @@ public enum BackupFormat {
             self.events = events
             self.documents = documents
             self.references = references
+            self.checkpoints = checkpoints
         }
     }
 
@@ -246,6 +275,10 @@ public enum BackupFormat {
         for reference in manifest.references where !seenReferencePieces.insert(reference.pieceID).inserted {
             throw BackupError.duplicateID(kind: "reference state", id: reference.pieceID.uuidString)
         }
+        var seenCheckpointIDs: Set<UUID> = []
+        for checkpoint in manifest.checkpoints where !seenCheckpointIDs.insert(checkpoint.id).inserted {
+            throw BackupError.duplicateID(kind: "checkpoint", id: checkpoint.id.uuidString)
+        }
 
         // --- Project + reference integrity ---------------------------------
         for piece in manifest.pieces where piece.projectID != manifest.project.id {
@@ -269,6 +302,21 @@ public enum BackupFormat {
             if let documentID = reference.documentID, !seenDocumentIDs.contains(documentID) {
                 throw BackupError.danglingReference(kind: "document", id: documentID.uuidString)
             }
+        }
+
+        var checkpointNames: [UUID: [String]] = [:]
+        for checkpoint in manifest.checkpoints {
+            guard seenPieceIDs.contains(checkpoint.pieceID) else {
+                throw BackupError.danglingReference(kind: "piece", id: checkpoint.pieceID.uuidString)
+            }
+            let problems = CheckpointRules.validationProblems(
+                name: checkpoint.name, completedRows: checkpoint.completedRows,
+                existingNames: checkpointNames[checkpoint.pieceID] ?? []
+            )
+            guard problems.isEmpty, RowArithmetic.isValid(repeatLength: checkpoint.repeatLength) else {
+                throw BackupError.invalidCountOrHistory(detail: "invalid checkpoint")
+            }
+            checkpointNames[checkpoint.pieceID, default: []].append(checkpoint.name.trimmingCharacters(in: .whitespacesAndNewlines))
         }
 
         // --- Row count / history consistency --------------------------------
@@ -482,6 +530,13 @@ public enum BackupFormat {
                 guideY: clamped.guideY
             )
         }
+        let checkpoints = manifest.checkpoints.map { checkpoint in
+            CheckpointSnapshot(
+                id: mapped(checkpoint.id), pieceID: mapped(checkpoint.pieceID),
+                name: checkpoint.name, completedRows: checkpoint.completedRows,
+                repeatLength: checkpoint.repeatLength, createdAt: checkpoint.createdAt
+            )
+        }
         let bytes = Dictionary(uniqueKeysWithValues: validated.documentBytes.map { (mapped($0.key), $0.value) })
         return ProjectSnapshotBundle(
             manifest: Manifest(
@@ -492,7 +547,8 @@ public enum BackupFormat {
                 pieces: pieces,
                 events: events,
                 documents: documents,
-                references: references
+                references: references,
+                checkpoints: checkpoints
             ),
             documentBytes: bytes
         )
