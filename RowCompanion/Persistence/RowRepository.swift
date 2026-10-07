@@ -241,6 +241,7 @@ public final class RowRepository {
 
         do {
             stored.completedRows = transition.piece.completedRows
+            stored.repeatLength = transition.piece.repeatLength
             context.insert(StoredRowEvent(
                 id: event.id,
                 pieceID: pieceID,

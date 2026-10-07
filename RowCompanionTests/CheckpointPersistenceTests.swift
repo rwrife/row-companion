@@ -76,6 +76,48 @@ final class CheckpointPersistenceTests: XCTestCase {
         XCTAssertEqual(try relaunched.history(for: piece.id).count, 1)
     }
 
+    func testBackupRoundTripPreservesCheckpointsAndHistory() throws {
+        let repo = try RowRepository(storeURL: storeURL)
+        let project = try repo.createProject(title: "Checkpoint backup")
+        let piece = try repo.addPiece(to: project.id, name: "Body", repeatLength: 8)
+        try repo.apply(.completeRow, to: piece.id)
+        let checkpoint = try repo.addCheckpoint(to: piece.id, name: "Ribbing")
+        try repo.apply(.setRepeatLength(4), to: piece.id)
+        try repo.apply(.completeRow, to: piece.id)
+        let service = BackupService(repository: repo)
+        let folder = tempDir.appendingPathComponent("backup")
+        try service.exportFullBackup(for: project.id, to: folder)
+        let newProject = try service.restore(from: folder)
+        let restoredPiece = try XCTUnwrap(repo.pieces(in: newProject).first)
+        let restoredCheckpoint = try XCTUnwrap(repo.checkpoints(for: restoredPiece.id).first)
+        XCTAssertNotEqual(restoredCheckpoint.id, checkpoint.id)
+        XCTAssertNotEqual(restoredPiece.id, piece.id)
+        XCTAssertEqual(restoredCheckpoint.completedRows, 1)
+        XCTAssertEqual(restoredCheckpoint.repeatLength, 8)
+        XCTAssertEqual(restoredPiece.repeatLength, 4)
+        XCTAssertEqual(try repo.history(for: restoredPiece.id).map(\.kind), [.completeRow, .repeatLengthChange, .completeRow])
+        try repo.restoreCheckpoint(restoredCheckpoint.id, confirmed: true)
+        XCTAssertEqual(try repo.piece(restoredPiece.id).completedRows, 1)
+        XCTAssertEqual(try repo.piece(piece.id).completedRows, 2)
+        let relaunched = try RowRepository.open(storeURL: storeURL)
+        XCTAssertEqual(try relaunched.checkpoints(for: restoredPiece.id).map(\.name), ["Ribbing"])
+        XCTAssertEqual(try relaunched.history(for: restoredPiece.id).last?.kind, .correction)
+    }
+
+    func testLegacyBackupDecodesWithoutCheckpointsAndNewExportsRequireV2() throws {
+        let repo = try RowRepository(storeURL: storeURL)
+        let project = try repo.createProject(title: "Legacy")
+        let data = try BackupService(repository: repo).exportProgress(for: project.id)
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        XCTAssertEqual(try decoder.decode(BackupFormat.Manifest.self, from: data).schemaVersion, 2)
+        var legacy = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        legacy.removeValue(forKey: "checkpoints")
+        legacy["schemaVersion"] = 1
+        let legacyData = try JSONSerialization.data(withJSONObject: legacy)
+        XCTAssertTrue(try decoder.decode(BackupFormat.Manifest.self, from: legacyData).checkpoints.isEmpty)
+    }
+
     func testMigratesOlderStoreAndDeletesCheckpointsWithProject() throws {
         let repo = try RowRepository(storeURL: storeURL)
         let project = try repo.createProject(title: "Test")

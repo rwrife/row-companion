@@ -81,7 +81,8 @@ public enum BackupError: Error, Equatable, Sendable {
 /// SwiftUI — the whole hostile-input surface is testable off-device.
 public enum BackupFormat {
     /// Manifest schema version written into every snapshot.
-    public static let schemaVersion = 1
+    /// v2 adds `checkpoints` (issue #18).
+    public static let schemaVersion = 2
     /// Restores refuse manifests stamped by a future schema (fail closed).
     public static let minimumSupportedVersion = 1
     /// Combined file-size cap for a staged restore (PLAN.md: 200 MiB).

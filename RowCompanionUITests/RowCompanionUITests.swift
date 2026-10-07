@@ -114,15 +114,12 @@ final class RowCompanionUITests: XCTestCase {
         XCTAssertTrue(complete.waitForExistence(timeout: 5))
         for _ in 0..<4 { complete.tap() }
 
-        // Save a checkpoint at row 4
+        // Save a checkpoint at row 4. XCTest may auto-scroll this nested
+        // ScrollView element on tap even if a window swipe misses that pane.
         let addCheckpoint = app.buttons["button.addCheckpoint"]
-        var scrollAttempts = 0
-        while !addCheckpoint.isHittable && scrollAttempts < 8 {
-            app.swipeUp()
-            scrollAttempts += 1
-        }
-        XCTAssertTrue(addCheckpoint.isHittable)
+        XCTAssertTrue(addCheckpoint.waitForExistence(timeout: 5))
         addCheckpoint.tap()
+        var scrollAttempts = 0
         let nameField = app.textFields["field.checkpoint.name"]
         XCTAssertTrue(nameField.waitForExistence(timeout: 5))
         nameField.tap()
@@ -153,8 +150,9 @@ final class RowCompanionUITests: XCTestCase {
             scrollAttempts += 1
         }
         restoreButton.tap()
-        XCTAssertTrue(app.buttons["button.confirmRestoreCheckpoint"].waitForExistence(timeout: 5))
-        app.buttons["button.confirmRestoreCheckpoint"].tap()
+        let confirm = app.buttons["button.confirmRestoreCheckpoint"].firstMatch
+        XCTAssertTrue(confirm.waitForExistence(timeout: 5))
+        confirm.tap()
         XCTAssertTrue(completed.waitForExistence(timeout: 5))
         XCTAssertTrue(completed.label.contains("4"))
 

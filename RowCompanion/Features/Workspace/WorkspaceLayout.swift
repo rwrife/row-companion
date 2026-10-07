@@ -333,7 +333,9 @@ private struct ControlPane: View {
             .accessibilityIdentifier("button.confirmRestoreCheckpoint")
             Button("Cancel", role: .cancel) { checkpointToRestore = nil }
         } message: {
-            Text(CheckpointRules.restoreExplanation)
+            if let checkpoint = checkpointToRestore {
+                Text("\(CheckpointRules.summaryText(for: checkpoint)). Current completed rows: \(piece.completedRows). Repeat settings stay unchanged. \(CheckpointRules.restoreExplanation)")
+            }
         }
     }
 
