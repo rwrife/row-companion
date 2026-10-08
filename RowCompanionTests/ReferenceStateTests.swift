@@ -228,6 +228,8 @@ final class ReferenceStateTests: XCTestCase {
         let project = try repo.createProject(title: "Sock")
         let piece = try repo.addPiece(to: project.id, name: "heel")
         let reminder = try repo.addReminder(to: piece.id, instruction: "Turn heel", interval: nil, startRow: 6)
+        let checkpoint = try repo.addCheckpoint(to: piece.id, name: "Heel start")
+        let event = try XCTUnwrap(repo.apply(.completeRow, to: piece.id))
         try repo.saveWorkspaceSession(WorkspaceSessionRecord(
             selectedProjectID: project.id, selectedPieceID: piece.id, controlScrollOffset: 0
         ))
@@ -236,7 +238,9 @@ final class ReferenceStateTests: XCTestCase {
         let model = WorkspaceModel(repository: reopened)
         XCTAssertEqual(model.selectedPieceID, piece.id)
         XCTAssertEqual(model.reminders.map(\.id), [reminder.id])
-        XCTAssertEqual(try reopened.piece(piece.id).completedRows, 0)
+        XCTAssertEqual(model.checkpoints.map(\.id), [checkpoint.id])
+        XCTAssertEqual(model.rowHistory.map(\.id), [event.id])
+        XCTAssertEqual(try reopened.piece(piece.id).completedRows, 1)
     }
 
     /// A transient session-read failure must inhibit every later persistence

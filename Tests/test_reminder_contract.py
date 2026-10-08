@@ -1,5 +1,8 @@
 from pathlib import Path
 import unittest
+import re
+
+# Schema versions may grow as additive piece-scoped models land.
 
 ROOT = Path(__file__).resolve().parents[1]
 APP = ROOT / 'RowCompanion'
@@ -69,8 +72,8 @@ class ReminderContractTests(unittest.TestCase):
     def test_reminders_migrate_with_store_version(self):
         factory = (APP / 'Persistence' / 'RowStoreFactory.swift').read_text()
         self.assertIn('StoredShapingReminder.self', factory)
-        # v3 is reserved for the session model (issue #13); #15 lands at 4.
-        self.assertIn('schemaVersion = 4', factory)
+        # v3 is reserved for the session model (issue #13); #15 lands at 4; #18 at 5.
+        self.assertTrue(re.search(r'schemaVersion\s*=\s*[45]', factory), factory)
 
     def test_ui_journey_targets_reminder_controls(self):
         layout = (APP / 'Features' / 'Workspace' / 'WorkspaceLayout.swift').read_text()

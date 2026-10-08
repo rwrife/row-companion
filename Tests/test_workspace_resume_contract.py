@@ -21,7 +21,7 @@ class WorkspaceResumeContractTests(unittest.TestCase):
         self.assertIn("func saveWorkspaceSession", repository)
         self.assertIn("StoredWorkspaceSession.self", factory)
         self.assertIn("StoredShapingReminder.self", factory)
-        self.assertIn("schemaVersion = 4", factory)
+        self.assertIn("schemaVersion = 5", factory)
         self.assertNotIn("RowAction", models.split("struct WorkspaceSessionRecord", 1)[1])
 
     def test_model_restores_and_captures_session_without_row_actions(self):

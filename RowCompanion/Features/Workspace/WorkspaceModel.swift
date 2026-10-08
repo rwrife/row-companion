@@ -81,6 +81,8 @@ public final class WorkspaceModel {
     /// Recomputed from durable counts only, so it survives relaunch by being
     /// regenerated on the next action — never stored, never a count input.
     public private(set) var crossingNotice: ReminderCrossingNotice?
+    public private(set) var checkpoints: [ProgressCheckpointRecord] = []
+    public private(set) var rowHistory: [RowEvent] = []
 
     public let backups: BackupService
 
@@ -122,6 +124,8 @@ public final class WorkspaceModel {
         controlScrollOffset = rawOffset.isFinite ? Swift.max(0, rawOffset) : 0
         loadReference()
         loadReminders()
+        loadCheckpoints()
+        loadRowHistory()
         refreshStatus()
         // If reading the previous session failed, preserve the on-disk record
         // untouched rather than overwriting it with fallback selections.
@@ -176,6 +180,8 @@ public final class WorkspaceModel {
         selectedPieceID = id
         loadReference()
         loadReminders()
+        loadCheckpoints()
+        loadRowHistory()
         refreshStatus()
     }
 
@@ -197,6 +203,30 @@ public final class WorkspaceModel {
             reminders = try repository.reminders(for: pieceID)
         } catch {
             reminders = []
+        }
+    }
+
+    private func loadCheckpoints() {
+        guard let pieceID = selectedPieceID else {
+            checkpoints = []
+            return
+        }
+        do {
+            checkpoints = try repository.checkpoints(for: pieceID)
+        } catch {
+            checkpoints = []
+        }
+    }
+
+    private func loadRowHistory() {
+        guard let pieceID = selectedPieceID else {
+            rowHistory = []
+            return
+        }
+        do {
+            rowHistory = try repository.history(for: pieceID)
+        } catch {
+            rowHistory = []
         }
     }
 
@@ -328,6 +358,46 @@ public final class WorkspaceModel {
             reportPersist(error)
             loadReminders()
         }
+    }
+
+    // MARK: - Progress checkpoints (issue #18)
+
+    public func addCheckpoint(name: String) {
+        guard let pieceID = selectedPieceID else {
+            lastError = .noPieceSelected
+            return
+        }
+        do {
+            _ = try repository.addCheckpoint(to: pieceID, name: name)
+            loadCheckpoints()
+        } catch let error as RowRepositoryError {
+            if case .checkpointInvalid(let message) = error {
+                lastError = .other(message)
+            } else {
+                reportPersist(error)
+            }
+        } catch { reportPersist(error) }
+    }
+
+    public func restoreCheckpoint(_ checkpointID: UUID, confirmed: Bool) {
+        guard checkpoints.contains(where: { $0.id == checkpointID && $0.pieceID == selectedPieceID }) else {
+            lastError = .other("That checkpoint does not belong to the selected piece.")
+            return
+        }
+        do {
+            _ = try repository.restoreCheckpoint(checkpointID, confirmed: confirmed)
+            reload(keepReference: true)
+            crossingNotice = nil
+            refreshStatus()
+        } catch { reportPersist(error) }
+    }
+
+    public func removeCheckpoint(id checkpointID: UUID) {
+        guard checkpoints.contains(where: { $0.id == checkpointID }) else { return }
+        do {
+            try repository.removeCheckpoint(id: checkpointID)
+            loadCheckpoints()
+        } catch { reportPersist(error) }
     }
 
     // MARK: - PDF import
@@ -594,6 +664,7 @@ public final class WorkspaceModel {
             lastError = .rowActionFailed(error as? RowRepositoryError ?? .storeUnavailable(underlying: String(describing: error)))
         }
         if keepReference { reference = previousReference }
+        loadRowHistory()
     }
 
     private func refreshStatus() {

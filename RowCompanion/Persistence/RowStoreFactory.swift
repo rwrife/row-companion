@@ -21,12 +21,13 @@ public enum RowStoreFactory {
     /// v2 adds `StoredPatternDocument` + `StoredReferenceState` (issue #3).
     /// v3 adds `StoredWorkspaceSession` (issue #13).
     /// v4 adds `StoredShapingReminder` (issue #15).
-    public static let schemaVersion = 4
+    /// v5 adds `StoredProgressCheckpoint` (issue #18).
+    public static let schemaVersion = 5
 
     public static var schema: Schema {
         Schema([StoredProject.self, StoredPiece.self, StoredRowEvent.self, StoredStoreInfo.self,
                 StoredPatternDocument.self, StoredReferenceState.self,
-                StoredWorkspaceSession.self, StoredShapingReminder.self])
+                StoredWorkspaceSession.self, StoredShapingReminder.self, StoredProgressCheckpoint.self])
     }
 
     /// Local, non-mirrored configuration for the given store URL.

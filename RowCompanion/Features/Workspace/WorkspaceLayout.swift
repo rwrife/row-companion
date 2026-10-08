@@ -167,6 +167,9 @@ private struct ControlPane: View {
     @State private var restoringScroll = true
     @State private var restoringTarget: Double?
     @State private var showReminderComposer = false
+    @State private var showHistory = false
+    @State private var showCheckpointComposer = false
+    @State private var checkpointToRestore: ProgressCheckpointRecord?
 
     var body: some View {
         ScrollView {
@@ -189,6 +192,8 @@ private struct ControlPane: View {
                         guideSlider
                     }
                     notesEditor(piece: piece)
+                    checkpointsSection(piece: piece)
+                    historySection(piece: piece)
                     remindersSection(piece: piece)
                 } else {
                     Text("Add a project and a piece to start counting.")
@@ -360,6 +365,70 @@ private struct ControlPane: View {
         let maximumOffset: Double
     }
 
+    private func checkpointsSection(piece: PieceRecord) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Progress checkpoints")
+                .font(.headline)
+            ForEach(model.checkpoints) { checkpoint in
+                HStack(alignment: .firstTextBaseline) {
+                    Text(CheckpointRules.summaryText(for: checkpoint))
+                    Spacer()
+                    Button("Return") { checkpointToRestore = checkpoint }
+                        .accessibilityIdentifier("button.checkpoint.restore")
+                    Button("Remove") { model.removeCheckpoint(id: checkpoint.id) }
+                        .accessibilityIdentifier("button.checkpoint.remove")
+                }
+            }
+            Button("Save checkpoint…") { showCheckpointComposer = true }
+                .frame(minHeight: 44)
+                .accessibilityIdentifier("button.addCheckpoint")
+        }
+        .sheet(isPresented: $showCheckpointComposer) {
+            CheckpointComposer(isPresented: $showCheckpointComposer)
+        }
+        .alert("Return to checkpoint?", isPresented: Binding(
+            get: { checkpointToRestore != nil },
+            set: { if !$0 { checkpointToRestore = nil } }
+        )) {
+            Button("Apply correction", role: .destructive) {
+                if let checkpoint = checkpointToRestore {
+                    model.restoreCheckpoint(checkpoint.id, confirmed: true)
+                }
+                checkpointToRestore = nil
+            }
+            .accessibilityIdentifier("button.confirmRestoreCheckpoint")
+            Button("Cancel", role: .cancel) { checkpointToRestore = nil }
+        } message: {
+            if let checkpoint = checkpointToRestore {
+                Text("\(CheckpointRules.summaryText(for: checkpoint)). Current completed rows: \(piece.completedRows). Repeat settings stay unchanged. \(CheckpointRules.restoreExplanation)")
+            }
+        }
+    }
+
+    private func historySection(piece: PieceRecord) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Button("Row history") { showHistory = true }
+                .frame(minHeight: 44)
+                .accessibilityIdentifier("button.showHistory")
+        }
+        .sheet(isPresented: $showHistory) {
+            NavigationStack {
+                List {
+                    ForEach(model.rowHistory) { event in
+                        Text("\(event.sequence). \(event.kind.rawValue) · \(event.before) → \(event.after)")
+                            .accessibilityIdentifier("history.timeline")
+                    }
+                }
+                .navigationTitle("Row history")
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Done") { showHistory = false }
+                    }
+                }
+            }
+        }
+    }
+
     /// Piece-scoped shaping reminders (issue #15): durable instructions the
     /// workspace shows when due. No notification permissions are requested —
     /// due state is derived live from the durable row count and recomputed
@@ -486,6 +555,40 @@ private struct ReminderComposer: View {
             validationMessage = error.userMessage
         } else {
             isPresented = false
+        }
+    }
+}
+
+private struct CheckpointComposer: View {
+    @Environment(WorkspaceModel.self) private var model
+    @Binding var isPresented: Bool
+    @State private var name = ""
+    @State private var validationMessage: String?
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                TextField("Checkpoint name", text: $name)
+                    .accessibilityIdentifier("field.checkpoint.name")
+                Text("Saves the current completed-row count for this piece. Returning later changes only the recorded count, not physical work or repeat settings.")
+                if let validationMessage { Text(validationMessage) }
+            }
+            .navigationTitle("Save checkpoint")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { isPresented = false }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        model.lastError = nil
+                        model.addCheckpoint(name: name)
+                        if let error = model.lastError {
+                            validationMessage = error.userMessage
+                        } else { isPresented = false }
+                    }
+                    .accessibilityIdentifier("button.checkpoint.save")
+                }
+            }
         }
     }
 }
