@@ -161,6 +161,11 @@ private struct ControlPane: View {
     @Environment(WorkspaceModel.self) private var model
     @State private var showCorrection = false
     @State private var correctionText = ""
+    @State private var scrollPosition = ScrollPosition(edge: .top)
+    /// Prevent the first geometry callback from overwriting the restored
+    /// durable offset while programmatic scrolling settles.
+    @State private var restoringScroll = true
+    @State private var restoringTarget: Double?
     @State private var showReminderComposer = false
     @State private var showHistory = false
     @State private var showCheckpointComposer = false
@@ -198,7 +203,63 @@ private struct ControlPane: View {
             }
             .padding(.vertical)
         }
+        .accessibilityIdentifier("workspace.controlsScroll")
         .frame(maxWidth: .infinity)
+        .scrollPosition($scrollPosition)
+        .onScrollGeometryChange(for: ControlScrollGeometry.self) { geometry in
+            let offset = max(0, Double(geometry.contentOffset.y + geometry.contentInsets.top))
+            let maximum = max(0, Double(
+                geometry.contentSize.height
+                    - geometry.containerSize.height
+                    + geometry.contentInsets.bottom
+                    + geometry.contentInsets.top
+            ))
+            return ControlScrollGeometry(offset: offset, maximumOffset: maximum)
+        } action: { _, geometry in
+            if restoringScroll {
+                if let target = restoringTarget,
+                   geometry.maximumOffset >= target,
+                   abs(geometry.offset - target) < 0.5 {
+                    restoringScroll = false
+                    restoringTarget = nil
+                }
+                // Ignore all geometry until layout has fully expanded to
+                // accommodate the target offset and scrolling has settled.
+            } else {
+                model.setControlScrollOffset(geometry.offset)
+            }
+        }
+        .onChange(of: model.selectedPieceID) { _, _ in
+            // Arm restore protection immediately on piece changes so any
+            // geometry callback between selection and task execution cannot
+            // persist a transitional offset.
+            restoringTarget = max(0, model.controlScrollOffset)
+            restoringScroll = true
+        }
+        .task(id: model.selectedPieceID) {
+            let target = max(0, model.controlScrollOffset)
+            restoringTarget = target
+            restoringScroll = true
+            // A single scrollTo issued before the pane finishes laying out
+            // (document-dependent rows such as the reading guide load late)
+            // is clamped against not-yet-expanded content and silently lands
+            // at the top. Re-issue on a bounded cadence until the geometry
+            // gate in the scroll callback confirms the target has settled.
+            // If the content can never host the target (short pane, changed
+            // piece state), the loop expires and the callback resumes normal
+            // tracking, which re-syncs the model to the clamped real offset.
+            var attempts = 0
+            while restoringScroll && attempts < 40, !Task.isCancelled {
+                scrollPosition.scrollTo(y: target)
+                attempts += 1
+                do { try await Task.sleep(nanoseconds: 50_000_000) }
+                catch { break }
+            }
+            if restoringScroll {
+                restoringScroll = false
+                restoringTarget = nil
+            }
+        }
     }
 
     /// Manual reading guide control: a slider (VoiceOver-adjustable, keyboard
@@ -297,6 +358,11 @@ private struct ControlPane: View {
                 Text("Replace the completed-row count? This records a correction in the piece history; Cancel keeps the current count.")
             }
         }
+    }
+
+    private struct ControlScrollGeometry: Equatable {
+        let offset: Double
+        let maximumOffset: Double
     }
 
     private func checkpointsSection(piece: PieceRecord) -> some View {

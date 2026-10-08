@@ -90,3 +90,33 @@ public final class StoredRowEvent {
         )
     }
 }
+
+/// Durable "which project/piece/scroll position was the user last looking
+/// at" record for issue #13 (resume). This is a singleton row keyed by
+/// `WorkspaceSessionRecord.activeKey` — deliberately separate from row
+/// progress and reference-state records, so a session-restore bug can never
+/// touch counts or the per-piece viewport.
+@Model
+public final class StoredWorkspaceSession {
+    @Attribute(.unique) public var key: String
+    public var selectedProjectID: UUID?
+    public var selectedPieceID: UUID?
+    public var controlScrollOffset: Double
+    public var updatedAt: Date
+
+    public init(key: String, selectedProjectID: UUID?, selectedPieceID: UUID?, controlScrollOffset: Double, updatedAt: Date) {
+        self.key = key
+        self.selectedProjectID = selectedProjectID
+        self.selectedPieceID = selectedPieceID
+        self.controlScrollOffset = controlScrollOffset
+        self.updatedAt = updatedAt
+    }
+
+    var record: WorkspaceSessionRecord {
+        WorkspaceSessionRecord(
+            selectedProjectID: selectedProjectID,
+            selectedPieceID: selectedPieceID,
+            controlScrollOffset: controlScrollOffset
+        )
+    }
+}

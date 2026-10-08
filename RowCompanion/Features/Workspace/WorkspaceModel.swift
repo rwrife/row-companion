@@ -52,6 +52,8 @@ public final class WorkspaceModel {
     public private(set) var documents: [PatternDocumentRecord] = []
     public var selectedProjectID: UUID?
     public var selectedPieceID: UUID?
+    /// Stored control-pane scroll offset restored on reopen (issue #13).
+    public private(set) var controlScrollOffset: Double = 0
     /// Viewer state for the *currently selected* piece (loaded clamped).
     public private(set) var reference: ReferenceState?
     /// Transient error copy for an alert; the UI clears it after display.
@@ -66,6 +68,9 @@ public final class WorkspaceModel {
     /// Non-destructive preview of a staged restore shown in the confirmation
     /// sheet before anything becomes durable.
     public private(set) var restorePreview: BackupService.RestorePreview?
+    /// True when reading the previous durable session failed; while true,
+    /// session-persistence is inhibited to protect the durable on-disk record.
+    public private(set) var sessionPersistenceDisabled = false
 
     /// Durable shaping reminders for the selected piece (issue #15), kept in
     /// creation order. Read-only from the UI; mutations go through
@@ -84,12 +89,73 @@ public final class WorkspaceModel {
     public init(repository: RowRepository) {
         self.repository = repository
         self.backups = BackupService(repository: repository)
+        restoreSessionOrFirstProject()
+    }
+
+    // MARK: - Session restore (issue #13)
+
+    /// Restore the durable project/piece only when each still exists. Missing
+    /// IDs fall back deterministically without changing row counts, history,
+    /// notes, or documents; the normalized fallback becomes the next session.
+    private func restoreSessionOrFirstProject() {
         reload()
-        if let first = projects.first {
-            select(project: first.id)
-        } else {
-            refreshStatus()
+        let saved: WorkspaceSessionRecord?
+        var readFailed = false
+        do {
+            saved = try repository.workspaceSession()
+        } catch {
+            saved = nil
+            readFailed = true
+            sessionPersistenceDisabled = true
+            statusMessage = "Last-open position could not be read."
         }
+
+        let savedProjectID = saved?.selectedProjectID
+        selectedProjectID = projects.contains { $0.id == savedProjectID }
+            ? savedProjectID
+            : projects.first?.id
+        reload()
+
+        let savedPieceID = saved?.selectedPieceID
+        selectedPieceID = pieces.contains { $0.id == savedPieceID }
+            ? savedPieceID
+            : pieces.first?.id
+        let rawOffset = saved?.controlScrollOffset ?? 0
+        controlScrollOffset = rawOffset.isFinite ? Swift.max(0, rawOffset) : 0
+        loadReference()
+        loadReminders()
+        loadCheckpoints()
+        loadRowHistory()
+        refreshStatus()
+        // If reading the previous session failed, preserve the on-disk record
+        // untouched rather than overwriting it with fallback selections.
+        if !readFailed {
+            persistSession()
+        }
+    }
+
+    /// Persist selection and control position separately from row progress.
+    /// Repository rollback preserves the previous durable session on failure.
+    public func persistSession() {
+        guard !sessionPersistenceDisabled else { return }
+        let session = WorkspaceSessionRecord(
+            selectedProjectID: selectedProjectID,
+            selectedPieceID: selectedPieceID,
+            controlScrollOffset: controlScrollOffset
+        )
+        do {
+            try repository.saveWorkspaceSession(session)
+        } catch {
+            statusMessage = "Last-open position could not be saved."
+        }
+    }
+
+    /// Lifecycle save point for backgrounding, device lock, app switching,
+    /// and process eviction. Normal interaction writes remain the primary
+    /// force-termination defense; this does not depend on a graceful quit.
+    public func captureCurrentWorkspace() {
+        captureCurrentReference()
+        persistSession()
     }
 
     // MARK: - Selection (never touches counts)
@@ -100,12 +166,14 @@ public final class WorkspaceModel {
         selectedProjectID = id
         reload()
         selectPieceKeepState(pieces.first?.id)
+        persistSession()
     }
 
     public func select(piece id: UUID?) {
         if id == selectedPieceID { return }
         captureCurrentReference()
         selectPieceKeepState(id)
+        persistSession()
     }
 
     private func selectPieceKeepState(_ id: UUID?) {
@@ -115,6 +183,13 @@ public final class WorkspaceModel {
         loadCheckpoints()
         loadRowHistory()
         refreshStatus()
+    }
+
+    /// User-controlled view position only. This method cannot construct or
+    /// apply a row action; invalid geometry is normalized before persistence.
+    public func setControlScrollOffset(_ offset: Double) {
+        controlScrollOffset = offset.isFinite ? Swift.max(0, offset) : 0
+        persistSession()
     }
 
     /// Reminder reads can never touch counts; a failed read simply shows an
@@ -179,6 +254,7 @@ public final class WorkspaceModel {
             let piece = try repository.addPiece(to: projectID, name: cleanedName, repeatLength: repeatLength)
             reload()
             selectPieceKeepState(piece.id)
+            persistSession()
         } catch {
             reportPersist(error)
         }
@@ -507,6 +583,9 @@ public final class WorkspaceModel {
         state.visibleRect = visibleRect
         if state.documentID == nil { state.documentID = documents.first?.id }
         reference = ViewportClamp.clamp(state, pageCount: pageCountOf(state.documentID))
+        // Save during normal interaction rather than waiting for a piece
+        // switch or graceful process exit.
+        persistReference(reference)
     }
 
     public func setGuide(y: Double?) {
