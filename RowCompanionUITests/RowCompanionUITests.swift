@@ -449,7 +449,17 @@ final class RowCompanionUITests: XCTestCase {
         let notes = app.textViews["control.notes"]
         XCTAssertTrue(notes.exists)
         let notesFrameAtTop = notes.frame
-        controlsScroll.swipeUp()
+        // New controls below notes increase the scroll range; a full swipe
+        // can overshoot the editor. Nudge within this pane toward its center.
+        for _ in 0..<8 {
+            let pane = controlsScroll.frame
+            let note = notes.frame
+            if notes.isHittable && notesFrameAtTop.minY - note.minY > 100 { break }
+            let start = controlsScroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+            let dy: CGFloat = note.midY < pane.midY ? 0.2 : -0.2
+            let end = controlsScroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5 + dy))
+            start.press(forDuration: 0.1, thenDragTo: end)
+        }
         XCTAssertTrue(notes.waitForExistence(timeout: 5))
         XCTAssertTrue(notes.isHittable)
         let notesFrameBefore = notes.frame
