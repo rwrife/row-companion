@@ -40,9 +40,13 @@
 		F40000000000000000000004 /* BackupTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E40000000000000000000004 /* BackupTests.swift */; };
 		F40000000000000000000005 /* ByteCount.swift in Sources */ = {isa = PBXBuildFile; fileRef = E40000000000000000000005 /* ByteCount.swift */; };
 		F1000000000000000000000A /* ReminderModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1000000000000000000000A /* ReminderModels.swift */; };
+		F1000000000000000000000E /* CheckpointModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1000000000000000000000E /* CheckpointModels.swift */; };
 		F1000000000000000000000B /* ReminderRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1000000000000000000000B /* ReminderRepository.swift */; };
+		F1000000000000000000000F /* CheckpointRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1000000000000000000000F /* CheckpointRepository.swift */; };
 		F1000000000000000000000C /* ReminderRulesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1000000000000000000000C /* ReminderRulesTests.swift */; };
+		F10000000000000000000010 /* CheckpointRulesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E10000000000000000000010 /* CheckpointRulesTests.swift */; };
 		F1000000000000000000000D /* ReminderPersistenceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1000000000000000000000D /* ReminderPersistenceTests.swift */; };
+		F10000000000000000000011 /* CheckpointPersistenceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E10000000000000000000011 /* CheckpointPersistenceTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -99,9 +103,13 @@
 		E40000000000000000000004 /* BackupTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupTests.swift; sourceTree = "<group>"; };
 		E40000000000000000000005 /* ByteCount.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ByteCount.swift; sourceTree = "<group>"; };
 		E1000000000000000000000A /* ReminderModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReminderModels.swift; sourceTree = "<group>"; };
+		E1000000000000000000000E /* CheckpointModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CheckpointModels.swift; sourceTree = "<group>"; };
 		E1000000000000000000000B /* ReminderRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReminderRepository.swift; sourceTree = "<group>"; };
+		E1000000000000000000000F /* CheckpointRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CheckpointRepository.swift; sourceTree = "<group>"; };
 		E1000000000000000000000C /* ReminderRulesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReminderRulesTests.swift; sourceTree = "<group>"; };
+		E10000000000000000000010 /* CheckpointRulesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CheckpointRulesTests.swift; sourceTree = "<group>"; };
 		E1000000000000000000000D /* ReminderPersistenceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReminderPersistenceTests.swift; sourceTree = "<group>"; };
+		E10000000000000000000011 /* CheckpointPersistenceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CheckpointPersistenceTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -172,7 +180,9 @@
 				E10000000000000000000008 /* RowReducerTests.swift */,
 				E10000000000000000000009 /* RowRepositoryTests.swift */,
 				E1000000000000000000000C /* ReminderRulesTests.swift */,
+				E10000000000000000000010 /* CheckpointRulesTests.swift */,
 				E1000000000000000000000D /* ReminderPersistenceTests.swift */,
+				E10000000000000000000011 /* CheckpointPersistenceTests.swift */,
 				E30000000000000000000008 /* ViewportClampTests.swift */,
 				E30000000000000000000009 /* PDFImportTests.swift */,
 				E3000000000000000000000A /* ReferenceStateTests.swift */,
@@ -201,6 +211,7 @@
 				E3000000000000000000000B /* PDFCoordinateSpace.swift */,
 				E40000000000000000000005 /* ByteCount.swift */,
 				E1000000000000000000000A /* ReminderModels.swift */,
+				E1000000000000000000000E /* CheckpointModels.swift */,
 			);
 			path = Domain;
 			sourceTree = "<group>";
@@ -213,6 +224,7 @@
 				E10000000000000000000006 /* RowRepository.swift */,
 				E30000000000000000000003 /* DocumentRecords.swift */,
 				E1000000000000000000000B /* ReminderRepository.swift */,
+				E1000000000000000000000F /* CheckpointRepository.swift */,
 			);
 			path = Persistence;
 			sourceTree = "<group>";
@@ -399,7 +411,9 @@
 				F40000000000000000000003 /* BackupService.swift in Sources */,
 				F40000000000000000000005 /* ByteCount.swift in Sources */,
 				F1000000000000000000000A /* ReminderModels.swift in Sources */,
+				F1000000000000000000000E /* CheckpointModels.swift in Sources */,
 				F1000000000000000000000B /* ReminderRepository.swift in Sources */,
+				F1000000000000000000000F /* CheckpointRepository.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -412,7 +426,9 @@
 				F10000000000000000000008 /* RowReducerTests.swift in Sources */,
 				F10000000000000000000009 /* RowRepositoryTests.swift in Sources */,
 				F1000000000000000000000C /* ReminderRulesTests.swift in Sources */,
+				F10000000000000000000010 /* CheckpointRulesTests.swift in Sources */,
 				F1000000000000000000000D /* ReminderPersistenceTests.swift in Sources */,
+				F10000000000000000000011 /* CheckpointPersistenceTests.swift in Sources */,
 				F30000000000000000000008 /* ViewportClampTests.swift in Sources */,
 				F30000000000000000000009 /* PDFImportTests.swift in Sources */,
 				F3000000000000000000000A /* ReferenceStateTests.swift in Sources */,

@@ -40,7 +40,15 @@ extension RowRepository {
         let pieces = try self.pieces(in: projectID)
         var events: [BackupFormat.EventSnapshot] = []
         var references: [BackupFormat.ReferenceSnapshot] = []
+        var checkpoints: [BackupFormat.CheckpointSnapshot] = []
         for piece in pieces {
+            for checkpoint in try self.checkpoints(for: piece.id) {
+                checkpoints.append(BackupFormat.CheckpointSnapshot(
+                    id: checkpoint.id, pieceID: checkpoint.pieceID,
+                    name: checkpoint.name, completedRows: checkpoint.completedRows,
+                    repeatLength: checkpoint.repeatLength, createdAt: checkpoint.createdAt
+                ))
+            }
             for event in try history(for: piece.id) {
                 events.append(BackupFormat.EventSnapshot(
                     id: event.id,
@@ -93,7 +101,8 @@ extension RowRepository {
             },
             events: events,
             documents: documentSnapshots,
-            references: references
+            references: references,
+            checkpoints: checkpoints
         )
     }
 
@@ -146,6 +155,16 @@ extension RowRepository {
             context.insert(StoredReferenceState(
                 pieceID: reference.pieceID, documentID: reference.documentID,
                 pageIndex: reference.pageIndex, visibleRect: reference.visibleRect, guideY: reference.guideY
+            ))
+        }
+        for checkpoint in manifest.checkpoints {
+            context.insert(StoredProgressCheckpoint(
+                id: checkpoint.id,
+                pieceID: checkpoint.pieceID,
+                name: checkpoint.name,
+                completedRows: checkpoint.completedRows,
+                repeatLength: checkpoint.repeatLength,
+                createdAt: checkpoint.createdAt
             ))
         }
         do {
@@ -201,9 +220,11 @@ extension RowRepository {
         }
 
         let reminders = try storedReminders(pieceIDs: pieceIDs)
+        let checkpoints = try storedCheckpoints(pieceIDs: pieceIDs)
         for object in events { context.delete(object) }
         for object in references { context.delete(object) }
         for object in reminders { context.delete(object) }
+        for object in checkpoints { context.delete(object) }
         for object in documents { context.delete(object) }
         for object in pieces { context.delete(object) }
         context.delete(project)

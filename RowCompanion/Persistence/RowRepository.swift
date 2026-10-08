@@ -15,6 +15,9 @@ public enum RowRepositoryError: Error, Equatable {
     /// associated text is the human-readable problem list. Nothing durable
     /// changed.
     case reminderInvalid(String)
+    /// A progress checkpoint as authored failed validation (issue #18).
+    case checkpointInvalid(String)
+    case checkpointNotFound(UUID)
 }
 
 /// Local-first, transactional row repository.
@@ -238,6 +241,7 @@ public final class RowRepository {
 
         do {
             stored.completedRows = transition.piece.completedRows
+            stored.repeatLength = transition.piece.repeatLength
             context.insert(StoredRowEvent(
                 id: event.id,
                 pieceID: pieceID,

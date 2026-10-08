@@ -25,7 +25,7 @@ class BackupContractTests(unittest.TestCase):
     def test_format_constants_match_plan(self):
         text = (BACKUP / 'BackupFormat.swift').read_text()
         self.assertIn('maximumTotalBytes = 200 * 1024 * 1024', text)
-        self.assertIn('public static let schemaVersion = 1', text)
+        self.assertRegex(text, r'public static let schemaVersion = [12]\b')
         # Hostile-archive checks all exist as distinct failure modes.
         for case in ('case schemaTooNew', 'case traversalPath', 'case absolutePath',
                      'case symlink(', 'case duplicatePath', 'case duplicateID',

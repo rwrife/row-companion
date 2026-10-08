@@ -22,12 +22,13 @@ public enum RowStoreFactory {
     /// v4 adds `StoredShapingReminder` (issue #15). v3 is reserved for the
     /// in-flight workspace-session model (issue #13); gaps are safe because
     /// the reader gate only rejects *newer-than-known* stamps.
-    public static let schemaVersion = 4
+    /// v5 adds `StoredProgressCheckpoint` (issue #18).
+    public static let schemaVersion = 5
 
     public static var schema: Schema {
         Schema([StoredProject.self, StoredPiece.self, StoredRowEvent.self, StoredStoreInfo.self,
                 StoredPatternDocument.self, StoredReferenceState.self,
-                StoredShapingReminder.self])
+                StoredShapingReminder.self, StoredProgressCheckpoint.self])
     }
 
     /// Local, non-mirrored configuration for the given store URL.
