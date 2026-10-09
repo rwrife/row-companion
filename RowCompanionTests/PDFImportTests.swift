@@ -213,6 +213,24 @@ extension PDFImportTests {
         XCTAssertEqual(try reopened.referenceState(for: copyPiece.id)?.documentID, copyDocument.id)
     }
 
+    func testDuplicatePreservesCurrentViewerReferenceWhenCopyingProgress() throws {
+        let repo = try RowRepository(storeURL: storeURL)
+        let project = try repo.createProject(title: "Live Viewer")
+        _ = try repo.addPiece(to: project.id, name: "Front")
+        let model = WorkspaceModel(repository: repo)
+        model.select(project: project.id)
+        XCTAssertNotNil(model.selectedPiece)
+        _ = try repo.importPatternDocument(from: writePDF(pages: 3), for: project.id)
+        model.select(project: project.id)
+        model.viewerMoved(pageIndex: 2, visibleRect: NormalizedRect(x: 0.1, y: 0.2, width: 0.5, height: 0.6))
+        try model.captureReferenceForDuplication()
+        let copyID = try repo.duplicateProject(project.id, title: "Duplicated", copyProgress: true)
+        let copyPiece = try XCTUnwrap(repo.pieces(in: copyID).first)
+        let copyRef = try XCTUnwrap(repo.referenceState(for: copyPiece.id))
+        XCTAssertEqual(copyRef.pageIndex, 2)
+        XCTAssertEqual(copyRef.visibleRect.x, 0.1, accuracy: 0.001)
+    }
+
     func testLibraryDuplicateFailureCleansCopiedFilesAndRecords() throws {
         let repo = try RowRepository(storeURL: storeURL)
         let project = try repo.createProject(title: "Original")

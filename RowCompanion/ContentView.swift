@@ -416,6 +416,9 @@ struct ProjectLibraryView: View {
             .sheet(item: $editing) { request in
                 LibraryEditView(summary: request.summary, duplicating: request.duplicate) { title, copyProgress in
                     if request.duplicate {
+                        if copyProgress && model.selectedProjectID == request.summary.id {
+                            try model.captureReferenceForDuplication()
+                        }
                         _ = try model.repository.duplicateProject(request.summary.id, title: title, copyProgress: copyProgress)
                         status = .active
                     } else { try model.repository.renameProject(request.summary.id, title: title) }

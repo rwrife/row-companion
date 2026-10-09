@@ -524,6 +524,11 @@ public final class WorkspaceModel {
         persistReference(reference)
     }
 
+    /// A progress copy must not silently duplicate an older reading position.
+    public func captureReferenceForDuplication() throws {
+        if let reference { try repository.saveReferenceState(reference) }
+    }
+
     private func persistReference(_ state: ReferenceState?) {
         guard let state else { return }
         do {
