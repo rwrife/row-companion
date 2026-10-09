@@ -23,12 +23,15 @@ public enum RowStoreFactory {
     /// in-flight workspace-session model (issue #13); gaps are safe because
     /// the reader gate only rejects *newer-than-known* stamps.
     /// v5 adds `StoredProgressCheckpoint` (issue #18).
-    public static let schemaVersion = 5
+    /// v6 adds `StoredLibraryEntry` (issue #14) without changing legacy entities.
+    /// SwiftData performs additive lightweight migration; missing entries read
+    /// as active, with last-worked derived from existing row events.
+    public static let schemaVersion = 6
 
     public static var schema: Schema {
         Schema([StoredProject.self, StoredPiece.self, StoredRowEvent.self, StoredStoreInfo.self,
                 StoredPatternDocument.self, StoredReferenceState.self,
-                StoredShapingReminder.self, StoredProgressCheckpoint.self])
+                StoredShapingReminder.self, StoredProgressCheckpoint.self, StoredLibraryEntry.self])
     }
 
     /// Local, non-mirrored configuration for the given store URL.
@@ -58,6 +61,10 @@ public enum RowStoreFactory {
         if let info = existing.first {
             guard info.schemaVersion <= schemaVersion else {
                 throw RowRepositoryError.unsupportedSchemaVersion(found: info.schemaVersion)
+            }
+            if info.schemaVersion < schemaVersion {
+                info.schemaVersion = schemaVersion
+                try context.save()
             }
         } else {
             context.insert(StoredStoreInfo(schemaVersion: schemaVersion, createdAt: Date()))

@@ -1,6 +1,7 @@
 import Foundation
 import CryptoKit
 import PDFKit
+import Darwin
 
 /// Every way a PDF import can be refused, with copy suitable for an alert.
 /// All cases happen **before** anything becomes durable — a rejection never
@@ -218,6 +219,42 @@ public enum PDFImport {
         data.range(of: Data("/Encrypt".utf8)) != nil
             ? .passwordProtected
             : .notAValidPDF
+    }
+
+    /// Non-destructive duplication validation. Pin a regular file descriptor
+    /// without following links, then read at most the limit plus one byte so
+    /// growth or replacement cannot turn this into an unbounded copy.
+    static func validatedOwnedBytes(sourceURL: URL, expectedSHA256: String, expectedPageCount: Int) throws -> Data {
+        let directory = sourceURL.deletingLastPathComponent()
+        let directoryDescriptor = open(directory.path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW)
+        guard directoryDescriptor >= 0 else { throw PDFImportError.notAValidPDF }
+        defer { close(directoryDescriptor) }
+        let descriptor = openat(directoryDescriptor, sourceURL.lastPathComponent, O_RDONLY | O_NOFOLLOW | O_NONBLOCK)
+        guard descriptor >= 0 else { throw PDFImportError.notAValidPDF }
+        let handle = FileHandle(fileDescriptor: descriptor, closeOnDealloc: true)
+        defer { try? handle.close() }
+        var info = stat()
+        guard fstat(descriptor, &info) == 0, (info.st_mode & S_IFMT) == S_IFREG else {
+            throw PDFImportError.notAValidPDF
+        }
+        guard info.st_size <= maximumBytes else {
+            throw PDFImportError.oversizedFile(byteCount: Int(clamping: info.st_size))
+        }
+        var data = Data()
+        while data.count <= maximumBytes {
+            let chunk = try handle.read(upToCount: min(64 * 1024, maximumBytes + 1 - data.count)) ?? Data()
+            if chunk.isEmpty { break }
+            data.append(chunk)
+        }
+        guard data.count <= maximumBytes else { throw PDFImportError.oversizedFile(byteCount: data.count) }
+        let hex = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+        guard hex == expectedSHA256 else { throw PDFImportError.integrityMismatch }
+        guard let pdf = PDFDocument(data: data) else { throw classifyUnopenable(data) }
+        guard !pdf.isEncrypted else { throw PDFImportError.passwordProtected }
+        guard pdf.pageCount > 0 else { throw PDFImportError.zeroPageDocument }
+        guard pdf.pageCount <= maximumPages else { throw PDFImportError.tooManyPages(pageCount: pdf.pageCount) }
+        guard pdf.pageCount == expectedPageCount else { throw PDFImportError.integrityMismatch }
+        return data
     }
 
     /// Re-verify an existing stored document against its recorded hash before

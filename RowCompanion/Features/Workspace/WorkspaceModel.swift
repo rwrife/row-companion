@@ -477,7 +477,7 @@ public final class WorkspaceModel {
         do {
             captureCurrentReference()
             try repository.deleteProject(projectID, confirmed: true)
-            select(project: nil)
+            projectWasDeleted(projectID)
             statusMessage = "Project and its app-owned files deleted. Your own exports and OS backups remain."
         } catch {
             reportBackup(error)
@@ -610,5 +610,17 @@ public final class WorkspaceModel {
         } else {
             lastError = .other(String(describing: error))
         }
+    }
+}
+
+@MainActor
+extension WorkspaceModel {
+    /// Clear deleted selection without attempting to persist its outgoing reference.
+    func projectWasDeleted(_ id: UUID) {
+        if selectedProjectID == id {
+            reference = nil
+            selectedPieceID = nil
+            select(project: nil)
+        } else { reload() }
     }
 }

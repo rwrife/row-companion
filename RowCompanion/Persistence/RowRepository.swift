@@ -252,10 +252,16 @@ public final class RowRepository {
                 createdAt: event.createdAt,
                 undoneEventID: event.undoneEventID
             ))
+            if event.kind != .repeatLengthChange {
+                let entry = try libraryEntry(piece.projectID)
+                entry.lastWorkedAt = event.createdAt
+            }
+            if let project = try storedProject(piece.projectID) { project.updatedAt = event.createdAt }
             try commit()
             return event
         } catch {
-            // `commit()` already rolled the context back on failure.
+            // Also roll back if a metadata fetch fails before commit().
+            context.rollback()
             throw error
         }
     }
@@ -325,6 +331,138 @@ public final class RowRepository {
         } catch {
             context.rollback()
             throw RowRepositoryError.saveFailed(underlying: String(describing: error))
+        }
+    }
+}
+
+@MainActor
+extension RowRepository {
+    func libraryEntry(_ projectID: UUID) throws -> StoredLibraryEntry {
+        let id = projectID
+        if let entry = try context.fetch(FetchDescriptor<StoredLibraryEntry>(predicate: #Predicate { $0.projectID == id })).first {
+            return entry
+        }
+        let entry = StoredLibraryEntry(projectID: id)
+        context.insert(entry)
+        return entry
+    }
+
+    public func librarySummaries() throws -> [LibrarySummary] {
+        let projects = try projects()
+        let entries = Dictionary(uniqueKeysWithValues: try context.fetch(FetchDescriptor<StoredLibraryEntry>()).map { ($0.projectID, $0) })
+        let pieces = try context.fetch(FetchDescriptor<StoredPiece>())
+        let piecesByProject = Dictionary(grouping: pieces, by: \.projectID)
+        // Only legacy/fresh entries lacking a cached date need history. No
+        // per-project or per-piece queries, and no full RowEvent conversion.
+        let legacyPieceIDs = pieces.filter { entries[$0.projectID]?.lastWorkedAt == nil }.map(\.id)
+        var datesByPiece: [UUID: Date] = [:]
+        if !legacyPieceIDs.isEmpty {
+            let events = try context.fetch(FetchDescriptor<StoredRowEvent>(predicate: #Predicate {
+                legacyPieceIDs.contains($0.pieceID) && $0.kindRaw != "repeatLengthChange"
+            }))
+            for event in events where RowEventKind(rawValue: event.kindRaw) != nil {
+                datesByPiece[event.pieceID] = max(datesByPiece[event.pieceID] ?? event.createdAt, event.createdAt)
+            }
+        }
+        return projects.map { project in
+            let pieces = piecesByProject[project.id] ?? []
+            let entry = entries[project.id]
+            return LibrarySummary(project: project,
+                status: ProjectStatus(rawValue: entry?.statusRaw ?? "active") ?? .active,
+                pieceCount: pieces.count, completedRows: pieces.reduce(0) { $0 + $1.completedRows },
+                lastWorkedAt: entry?.lastWorkedAt ?? pieces.compactMap { datesByPiece[$0.id] }.max())
+        }
+    }
+
+    public func renameProject(_ id: UUID, title: String) throws {
+        let title = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !title.isEmpty else { throw RowRepositoryError.saveFailed(underlying: "Enter a project title.") }
+        guard let project = try storedProject(id) else { throw RowRepositoryError.projectNotFound(id) }
+        project.title = title
+        project.updatedAt = Date()
+        try commit()
+    }
+
+    public func setProjectStatus(_ id: UUID, status: ProjectStatus) throws {
+        guard try storedProject(id) != nil else { throw RowRepositoryError.projectNotFound(id) }
+        let entry = try libraryEntry(id)
+        entry.statusRaw = status.rawValue
+        try commit()
+    }
+
+    /// One transaction, fresh identities and independent app-owned PDF copies.
+    /// Progress includes full history with remapped undo links, never a count alone.
+    @discardableResult
+    public func duplicateProject(_ id: UUID, title: String, copyProgress: Bool = false) throws -> UUID {
+        let title = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !title.isEmpty else { throw RowRepositoryError.saveFailed(underlying: "Enter a project title.") }
+        guard try storedProject(id) != nil else { throw RowRepositoryError.projectNotFound(id) }
+        let newID = UUID()
+        var copiedFiles: [URL] = []
+        do {
+            var documentIDs: [UUID: UUID] = [:]
+            for document in try documents(in: id) {
+                let documentID = UUID()
+                let filename = documentID.uuidString + ".pdf"
+                let destination = PDFImport.documentsDirectory(storeURL: storeURL).appendingPathComponent(filename)
+                let source = try documentFileURL(document.id)
+                guard document.relativePath == "RowCompanionImported/" + source.lastPathComponent,
+                      source.pathExtension == "pdf",
+                      UUID(uuidString: source.deletingPathExtension().lastPathComponent) != nil else {
+                    throw PDFImportError.notAValidPDF
+                }
+                // Track before copying so even a partially written destination
+                // is removed if the filesystem rejects the copy.
+                guard !FileManager.default.fileExists(atPath: destination.path) else {
+                    throw RowRepositoryError.saveFailed(underlying: "Document destination already exists.")
+                }
+                copiedFiles.append(destination)
+                let data = try PDFImport.validatedOwnedBytes(sourceURL: source,
+                    expectedSHA256: document.sha256, expectedPageCount: document.pageCount)
+                try data.write(to: destination, options: .withoutOverwriting)
+                documentIDs[document.id] = documentID
+                context.insert(StoredPatternDocument(id: documentID, projectID: newID,
+                    relativePath: "RowCompanionImported/" + filename, sha256: document.sha256, pageCount: document.pageCount))
+            }
+            let now = Date()
+            context.insert(StoredProject(id: newID, title: title, createdAt: now, updatedAt: now))
+            for piece in try pieces(in: id) {
+                let pieceID = UUID()
+                context.insert(StoredPiece(id: pieceID, projectID: newID, name: piece.name,
+                    completedRows: copyProgress ? piece.completedRows : 0, repeatLength: piece.repeatLength, notes: piece.notes))
+                for reminder in try reminders(for: piece.id) {
+                    context.insert(StoredShapingReminder(id: UUID(), pieceID: pieceID, instruction: reminder.instruction,
+                        intervalRaw: reminder.interval, startRow: reminder.startRow, endRow: reminder.endRow, createdAt: now))
+                }
+                if copyProgress {
+                    let events = try history(for: piece.id)
+                    let eventIDs = Dictionary(uniqueKeysWithValues: events.map { ($0.id, UUID()) })
+                    for event in events {
+                        context.insert(StoredRowEvent(id: eventIDs[event.id]!, pieceID: pieceID, sequence: event.sequence,
+                            kind: event.kind, before: event.before, after: event.after, createdAt: event.createdAt,
+                            undoneEventID: event.undoneEventID.flatMap { eventIDs[$0] }))
+                    }
+                    for checkpoint in try checkpoints(for: piece.id) {
+                        context.insert(StoredProgressCheckpoint(id: UUID(), pieceID: pieceID, name: checkpoint.name,
+                            completedRows: checkpoint.completedRows, repeatLength: checkpoint.repeatLength, createdAt: checkpoint.createdAt))
+                    }
+                }
+                if let state = try referenceState(for: piece.id) {
+                    if copyProgress {
+                        context.insert(StoredReferenceState(pieceID: pieceID, documentID: state.documentID.flatMap { documentIDs[$0] },
+                            pageIndex: state.pageIndex, visibleRect: state.visibleRect, guideY: state.guideY))
+                    } else if let remappedDoc = state.documentID.flatMap({ documentIDs[$0] }) {
+                        context.insert(StoredReferenceState(pieceID: pieceID, documentID: remappedDoc,
+                            pageIndex: 0, visibleRect: .full, guideY: nil))
+                    }
+                }
+            }
+            try commit()
+            return newID
+        } catch {
+            context.rollback()
+            for file in copiedFiles { try? FileManager.default.removeItem(at: file) }
+            throw error
         }
     }
 }
