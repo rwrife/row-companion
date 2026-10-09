@@ -431,7 +431,8 @@ struct ProjectLibraryView: View {
                     }
                     deleting = nil
                 }
-                Button("Cancel", role: .cancel) { deleting = nil }
+                Button("Keep Project") { deleting = nil }
+                    .accessibilityIdentifier("library.keepProject")
             } message: {
                 Text("This removes the project, pieces, history, and app-owned pattern copies. User exports and OS backups remain outside the app's control.")
             }
