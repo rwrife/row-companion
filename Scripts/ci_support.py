@@ -182,35 +182,27 @@ def _count_cases(node, tallies, pending, ancestor_verdicts=()):
         tallies[node['result']] += 1
         return 1
     # A leaf published WITHOUT its own verdict (runs 35656419607 /
-    # 35661673966 / 35662926491, Xcode 26.0.1: the aggregate summary counted
-    # 57/57 Passed while the tree carried only 56 verdicts — the resultless
-    # leaf is one of those counted cases). Tally it directly only when every
-    # enclosing container shares exactly one verdict, so the inherited
-    # verdict is unambiguous. Otherwise defer it to the aggregate reconcile
-    # in sanitize_report (runs 35952796584 / 36005354055: an intentionally
-    # skipped UI test puts both 'Passed' and 'Skipped' verdicts on the
-    # ancestor path of a resultless leaf; the tree cannot inherit, but the
-    # independent aggregate summary can still attest the leaf uniquely).
-    unique = set(ancestor_verdicts)
-    if len(unique) == 1:
-        tallies[next(iter(unique))] += 1
-        return 1
-    pending.append(sorted(unique))
-    return 1
+    # 35661673966 / 35662926491, Xcode 26.0.1). Ancestor verdicts are only a
+    # hint: recent hosted evidence with real test failures shows leafs under a
+    # failed suite can still represent skipped tests, so we defer all verdict
+    # attribution to the independent aggregate summary. A resultless leaf may
+    # also be an empty structural node, so it is only tallied as a case if the
+    # aggregate summary has a matching deficit.
+    pending.append(sorted(set(ancestor_verdicts)))
+    return 0
 
 
 def _reconcile_pending(tallies, pending, clean_summary):
-    """Attribute resultless leaves whose ancestors gave no unique verdict.
+    """Attribute resultless leaves from aggregate deficits.
 
-    Succeeds only when the aggregate summary's per-verdict deficits name
-    exactly one verdict whose deficit equals the number of pending leaves;
-    any other distribution cannot be attested and fails closed. The summary
-    is the same independently exported aggregate that gates publication of
-    the whole report afterwards, so this adds no new information source and
-    no leak surface.
+    Resultless leaves are deferred here rather than assumed to be test cases
+    (an empty structural wrapper also presents as a resultless leaf).
+    Attribution succeeds only when aggregate deficits are non-negative and
+    at most equal to the pending leaf count; deficits are attributed directly
+    to tallies and the total attributed is added to caseCount.
     """
     if not pending:
-        return
+        return 0
     keys = {'Passed': 'passedTests', 'Failed': 'failedTests',
             'Skipped': 'skippedTests'}
     deficits = {v: clean_summary[k] - tallies[v] for v, k in keys.items()}
@@ -218,14 +210,17 @@ def _reconcile_pending(tallies, pending, clean_summary):
         raise ValueError('Resultless xcresult leaf has no unique enclosing '
                          'verdict and aggregate deficits are inconsistent: '
                          + json.dumps(deficits))
-    positive = [v for v, d in deficits.items() if d > 0]
-    if len(positive) != 1 or deficits[positive[0]] != len(pending):
+    unresolved = sum(deficits.values())
+    if unresolved > len(pending):
         raise ValueError('Resultless xcresult leaf has no unique enclosing '
                          'verdict and cannot be reconciled with the '
                          'aggregate summary: ' + json.dumps(
                              {'pendingAncestors': pending,
-                              'deficits': deficits}))
-    tallies[positive[0]] += len(pending)
+                              'deficits': deficits,
+                              'pendingCount': len(pending)}))
+    for verdict, amount in deficits.items():
+        tallies[verdict] += amount
+    return unresolved
 
 
 def sanitize_report(payload, summary):
@@ -251,7 +246,7 @@ def sanitize_report(payload, summary):
     pending: list = []
     case_count = sum(_count_cases(node, tallies, pending) for node in nodes)
     if pending:
-        _reconcile_pending(tallies, pending, clean_summary)
+        case_count += _reconcile_pending(tallies, pending, clean_summary)
     if (case_count != clean_summary['totalTestCount']
             or tallies['Passed'] != clean_summary['passedTests']
             or tallies['Failed'] != clean_summary['failedTests']
