@@ -198,15 +198,15 @@ public final class WorkspaceModel {
     /// repository has already rolled back, so we re-read the durable truth
     /// rather than optimistically updating a counter (PLAN: "a failed durable
     /// save must not display a committed counter update").
-    public func completeRow() { rowAction(.completeRow) }
-    public func undoRow() { rowAction(.undo) }
+    @discardableResult public func completeRow() -> Bool { rowAction(.completeRow) }
+    @discardableResult public func undoRow() -> Bool { rowAction(.undo) }
     public func correctCount(to value: Int, confirmed: Bool) { rowAction(.correction(to: value, confirmed: confirmed)) }
     public func setRepeatLength(_ length: Int?) { rowAction(.setRepeatLength(length)) }
 
-    private func rowAction(_ action: RowAction) {
+    @discardableResult private func rowAction(_ action: RowAction) -> Bool {
         guard let pieceID = selectedPieceID else {
             lastError = .noPieceSelected
-            return
+            return false
         }
         let beforeRows = pieces.first(where: { $0.id == pieceID })?.completedRows
         do {
@@ -222,12 +222,15 @@ public final class WorkspaceModel {
                 )
             }
             refreshStatus()
+            return true
         } catch let error as RowDomainError {
             lastError = .rowDomainFailed(error)
             reload(keepReference: true)
+            return false
         } catch {
             lastError = .rowActionFailed(error as? RowRepositoryError ?? .storeUnavailable(underlying: String(describing: error)))
             reload(keepReference: true)
+            return false
         }
     }
 

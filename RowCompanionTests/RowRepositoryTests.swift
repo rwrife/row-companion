@@ -21,6 +21,24 @@ final class RowRepositoryTests: XCTestCase {
         try? FileManager.default.removeItem(at: tempDir)
     }
 
+    func testFocusedCountReportsSaveOutcome() throws {
+        let repo = try RowRepository(storeURL: storeURL)
+        let project = try repo.createProject(title: "Focus")
+        let piece = try repo.addPiece(to: project.id, name: "Sleeve", repeatLength: 4)
+        let model = WorkspaceModel(repository: repo)
+        model.select(project: project.id)
+        XCTAssertEqual(model.selectedPieceID, piece.id)
+        XCTAssertTrue(model.completeRow())
+        XCTAssertEqual(try repo.piece(piece.id).completedRows, 1)
+        struct Fault: Error {}
+        repo.testSaveFault = { throw Fault() }
+        XCTAssertFalse(model.completeRow(), "failed commit must not trigger success feedback")
+        XCTAssertEqual(try repo.piece(piece.id).completedRows, 1)
+        repo.testSaveFault = nil
+        XCTAssertTrue(model.undoRow())
+        XCTAssertEqual(try repo.piece(piece.id).completedRows, 0)
+    }
+
     func testCreateProjectAndPieceRoundTrip() throws {
         let repo = try RowRepository(storeURL: storeURL)
         let project = try repo.createProject(title: "Scarf")

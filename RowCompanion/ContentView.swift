@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import UniformTypeIdentifiers
 
 /// Root workspace screen (issue #3): project/piece selection, bounded PDF
@@ -8,6 +9,9 @@ import UniformTypeIdentifiers
 /// never touches counts or viewport.
 struct ContentView: View {
     @Environment(WorkspaceModel.self) private var model
+    @AppStorage("focus.haptics") private var focusHaptics = false
+    @AppStorage("focus.keepAwake") private var focusKeepAwake = false
+    @State private var showFocus = false
     @State private var showLibrary = false
     @State private var showNewProject = false
     @State private var showNewPiece = false
@@ -59,6 +63,12 @@ struct ContentView: View {
                 model.importPDF(from: url)
             }
         }
+        .fullScreenCover(isPresented: $showFocus) {
+            FocusCountingView(
+                hapticsEnabled: $focusHaptics,
+                keepAwakeEnabled: $focusKeepAwake
+            )
+        }
         .sheet(isPresented: $showLibrary) { ProjectLibraryView() }
         .sheet(isPresented: $showNewProject) { newProjectSheet }
         .sheet(isPresented: $showNewPiece) { newPieceSheet }
@@ -109,6 +119,9 @@ struct ContentView: View {
                     .accessibilityIdentifier("workspace.title")
                 Spacer()
                 Menu {
+                    Button("Focused counting", action: { showFocus = true })
+                        .accessibilityIdentifier("focus.enter")
+                        .disabled(model.selectedPieceID == nil)
                     Button("Project Library", action: { showLibrary = true })
                         .accessibilityIdentifier("menu.library")
                     Button("New project", action: { showNewProject = true })
@@ -322,6 +335,87 @@ struct ContentView: View {
                 }
             }
         }
+    }
+}
+
+/// A modal display of the same selected piece. Closing the cover reuses the
+/// existing workspace model and its untouched PDF/notes/guide state.
+private struct FocusCountingView: View {
+    @Environment(WorkspaceModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+    @Binding var hapticsEnabled: Bool
+    @Binding var keepAwakeEnabled: Bool
+    @Environment(\.scenePhase) private var scenePhase
+    @ScaledMetric(relativeTo: .largeTitle) private var readoutSize = 54
+
+    // ponytail: UIApplication's idle timer is process-wide. Gate it on this
+    // foreground cover and restore it on exit; use a scene-specific assertion
+    // if the app ever gains multiple active window scenes.
+    private var shouldKeepAwake: Bool { keepAwakeEnabled && scenePhase == .active }
+
+    var body: some View {
+        VStack(spacing: 18) {
+            HStack {
+                Text("Focused counting").font(.headline).accessibilityAddTraits(.isHeader)
+                Spacer()
+                Button("Back to pattern") { dismiss() }
+                    .frame(minHeight: 44)
+                    .accessibilityIdentifier("focus.exit")
+            }
+            if let piece = model.selectedPiece {
+                Text(piece.name).font(.title2).accessibilityIdentifier("focus.piece")
+                Spacer(minLength: 8)
+                Text(RowLabels.completedRows(piece.completedRows))
+                    .font(.system(size: readoutSize, weight: .bold, design: .rounded))
+                    .minimumScaleFactor(0.5)
+                    .lineLimit(1)
+                    .accessibilityIdentifier("focus.completed")
+                if let next = piece.nextRepeatRow {
+                    Text(RowLabels.nextRepeatRow(next))
+                        .font(.title.bold())
+                        .accessibilityIdentifier("focus.next")
+                }
+                Text(model.statusMessage)
+                    .font(.callout)
+                    .accessibilityIdentifier("focus.status")
+                Spacer(minLength: 8)
+                Button("Complete row") {
+                    if model.completeRow() && hapticsEnabled && !UIAccessibility.isReduceMotionEnabled {
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .frame(maxWidth: .infinity, minHeight: 60)
+                .accessibilityIdentifier("focus.complete")
+                Button("Undo") {
+                    if model.undoRow() && hapticsEnabled && !UIAccessibility.isReduceMotionEnabled {
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    }
+                }
+                .buttonStyle(.bordered)
+                .frame(maxWidth: .infinity, minHeight: 60)
+                .accessibilityIdentifier("focus.undo")
+                Toggle("Haptic confirmation after saved row actions", isOn: $hapticsEnabled)
+                    .accessibilityIdentifier("focus.haptics")
+                Toggle("Keep screen awake while focused", isOn: $keepAwakeEnabled)
+                    .accessibilityIdentifier("focus.keepAwake")
+            } else {
+                Text("Choose a piece before counting.")
+            }
+        }
+        .padding()
+        // ponytail: the idle timer is process-wide and nothing else in this
+        // app holds it; if that ever changes, take/restore the previous value.
+        .onAppear { UIApplication.shared.isIdleTimerDisabled = shouldKeepAwake }
+        .onChange(of: shouldKeepAwake) { _, active in
+            UIApplication.shared.isIdleTimerDisabled = active
+        }
+        .onDisappear { UIApplication.shared.isIdleTimerDisabled = false }
+        .alert("Count not saved", isPresented: Binding(
+            get: { model.lastError != nil },
+            set: { if !$0 { model.lastError = nil } }
+        )) { Button("OK") { model.lastError = nil } }
+        message: { Text(model.lastError?.userMessage ?? "Nothing was counted.") }
     }
 }
 
