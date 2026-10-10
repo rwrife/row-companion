@@ -113,3 +113,17 @@ public enum RowAction: Equatable, Sendable {
     /// total completed count.
     case setRepeatLength(Int?)
 }
+
+public enum ProjectStatus: String, CaseIterable, Hashable, Sendable {
+    case active, archived, completed
+    public var label: String { rawValue.capitalized }
+}
+
+public struct LibrarySummary: Identifiable, Sendable {
+    public var id: UUID { project.id }
+    public let project: ProjectRecord
+    public let status: ProjectStatus
+    public let pieceCount: Int
+    public let completedRows: Int
+    public let lastWorkedAt: Date?
+}

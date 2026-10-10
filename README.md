@@ -4,6 +4,8 @@ Local-first iPhone workspace for knitters and crocheters to keep pattern PDFs be
 
 ## Status
 
+Issue #14 adds a native local project library with organizational status and independent setup/progress duplication; native CI acceptance remains pending.
+
 **Versioned backup/restore and privacy-safe deletion (issue #5) with piece-scoped shaping reminders (issue #15), on top of issue #4's accessible workspace layout and issue #3's PDF import / resumable workspace.** The repository contains the native Xcode project, shared scheme, and the tested layers so far: the repeat-aware row domain, a CloudKit-disabled SwiftData repository with atomic commits, bounded PDF import (50 MiB / 500-page pre-flight limits, generated app-owned filenames, staged import with no partial records on failure, locked/corrupt/zero-page/oversized rejection), the PDFKit viewer seam with the documented top-left normalized viewport convention and clamp-on-restore rules, per-piece durable reference state (page, zoomed visible rect, manual guide, notes), the compact/two-pane `WorkspaceLayout` seam, and the portable-backup layer: schema-versioned progress export (metadata only — never PDF bytes or source filenames), opt-in full folder backup gated behind explicit copyright/originals acknowledgements, staged restore with hostile-archive validation (traversal/symlink/duplicate/dangling/oversized/hash-mismatch, quarantined staging that is always removed on failure) importing strictly as a new project with fresh IDs and per-copy generated filenames, and confirmed project deletion that removes only app-owned files while stating what it cannot reach (user exports, OS backups). Piece-scoped shaping reminders (issue #15) are one-shot or every-N-rows instructions with an optional end row: due-for-the-next-row instructions appear as a labelled banner distinct from milestone-reached badges, and a count change that crosses milestones reports every instruction it passed (direction-aware, capped so a huge correction never floods the screen). Due state is a pure function of the durable completed-row count — recomputed after complete, undo, correction, repeat edits, and relaunch — so no timers, notifications, or permissions are involved. Arrangement now runs through the pure `WorkspaceArrangement` rules: two panes require regular width AND readable Dynamic Type (accessibility text sizes reflow to stacked), pane order in the wide layout is user-reversible and arrangement-only, the manual reading guide is a VoiceOver/keyboard-operable slider with an explicit off switch, and completed vs next repeat rows are separate labelled accessibility targets with 44-point control floors. A documented note (not an API dependency) marks the future iPhone Duo safe-region adapter seam; no fold SDK API is used. Real simulator integration runs on the pinned macOS CI job; Linux helper tests are not iOS build evidence. See [PLAN.md](PLAN.md), [issue #3](https://github.com/rwrife/row-companion/issues/3), [issue #4](https://github.com/rwrife/row-companion/issues/4), and [issue #5](https://github.com/rwrife/row-companion/issues/5).
 
 ## Why / who
@@ -139,3 +141,36 @@ Repository Actions secrets configured: `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_P
 7. Signed TestFlight candidate and store-readiness checklist.
 
 MIT code/docs license; user-supplied patterns retain their own licenses.
+
+## Local project library (issue #14)
+
+Open **Add → Project Library** to browse active, archived, or completed projects.
+Search matches project titles; sort by last worked, title, or creation date.
+Each entry shows piece count, total completed rows, and the last count action
+(complete, undo, or correction). Opening a project, renaming, changing status,
+and editing repeat configuration do not mark it worked or advance a count.
+Status is organizational; archived and completed projects remain editable.
+
+**Duplicate setup** defaults to zero counts with fresh history, checkpoints,
+and reading positions. It copies piece names, repeat settings, notes, reminders,
+and separate app-owned PDF files. **Copy progress and history** explicitly opts
+into counts, full history with fresh event IDs and remapped undo links,
+checkpoints, and reading positions. Each duplicate starts active and can be
+changed or deleted independently. Deletion requires confirmation and removes
+only the app-owned copies; exported files and OS backups remain separate.
+
+Store v6 adds a library entity without changing the existing entity shapes,
+using SwiftData's additive lightweight migration. Legacy projects default to
+active and derive last worked from their existing history. The store version
+stamp advances after successful opening; no store reset or history rewrite is
+used. The portable backup format remains unchanged: library status is local
+organization metadata and restored projects start active.
+
+Native XCTest coverage includes an actual v5 schema fixture (without the library
+entity), durable reopen, failed-save rollback, duplicate history/undo consistency,
+and independent document ownership. UI journeys cover fresh and explicit
+progress copies, rename, search, archive/completion, relaunch, and confirmed or
+cancelled deletion. These tests are authored for macOS CI; this Linux worktree
+cannot run SwiftData, SwiftUI, XCTest, or simulator accessibility checks. Physical
+VoiceOver, accessibility Dynamic Type, and native migration execution still need
+macOS/device evidence.

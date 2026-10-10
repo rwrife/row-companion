@@ -159,3 +159,171 @@ final class RowRepositoryTests: XCTestCase {
         }
     }
 }
+
+/// Library acceptance uses real disk stores, including the pre-library schema.
+@MainActor
+final class ProjectLibraryTests: XCTestCase {
+    private func withStore(_ body: (URL) throws -> Void) throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try body(directory.appendingPathComponent("library.sqlite"))
+    }
+
+    func testStatusRenameSummaryAndLastWorkedSurviveRelaunch() throws {
+        try withStore { url in
+            let repo = try RowRepository(storeURL: url)
+            let project = try repo.createProject(title: "Scarf")
+            let piece = try repo.addPiece(to: project.id, name: "Body", repeatLength: 8)
+            XCTAssertNil(try repo.librarySummaries().first?.lastWorkedAt)
+            try repo.apply(.setRepeatLength(4), to: piece.id)
+            XCTAssertNil(try repo.librarySummaries().first?.lastWorkedAt)
+            try repo.apply(.completeRow, to: piece.id)
+            try repo.renameProject(project.id, title: "  Winter scarf \n")
+            for status in ProjectStatus.allCases { try repo.setProjectStatus(project.id, status: status) }
+            let reopened = try RowRepository.open(storeURL: url)
+            let summary = try XCTUnwrap(reopened.librarySummaries().first)
+            XCTAssertEqual(summary.project.title, "Winter scarf")
+            XCTAssertEqual(summary.status, .completed)
+            XCTAssertEqual(summary.completedRows, 1)
+            XCTAssertEqual(summary.pieceCount, 1)
+            XCTAssertNotNil(summary.lastWorkedAt)
+            XCTAssertThrowsError(try reopened.renameProject(project.id, title: " \n"))
+        }
+    }
+
+    func testFreshDuplicateAndProgressDuplicateHaveIndependentConsistentHistory() throws {
+        try withStore { url in
+            let repo = try RowRepository(storeURL: url)
+            let project = try repo.createProject(title: "Sweater")
+            let piece = try repo.addPiece(to: project.id, name: "Front", repeatLength: 8, startingRows: 3)
+            try repo.setNotes("Original fixture notes", on: piece.id)
+            try repo.addReminder(to: piece.id, instruction: "Shape", interval: 2, startRow: 4)
+            try repo.apply(.completeRow, to: piece.id)
+            try repo.apply(.completeRow, to: piece.id)
+            try repo.apply(.undo, to: piece.id)
+            try repo.addCheckpoint(to: piece.id, name: "Ribbing")
+            let freshID = try repo.duplicateProject(project.id, title: "Fresh")
+            let fresh = try XCTUnwrap(repo.pieces(in: freshID).first)
+            XCTAssertEqual(fresh.completedRows, 0)
+            XCTAssertEqual(fresh.repeatLength, 8)
+            XCTAssertEqual(fresh.notes, "Original fixture notes")
+            XCTAssertTrue(try repo.history(for: fresh.id).isEmpty)
+            XCTAssertTrue(try repo.checkpoints(for: fresh.id).isEmpty)
+            XCTAssertNil(try repo.referenceState(for: fresh.id))
+            XCTAssertEqual(try repo.reminders(for: fresh.id).count, 1)
+            let copiedID = try repo.duplicateProject(project.id, title: "Progress", copyProgress: true)
+            let copied = try XCTUnwrap(repo.pieces(in: copiedID).first)
+            let history = try repo.history(for: copied.id)
+            let sourceHistory = try repo.history(for: piece.id)
+            XCTAssertEqual(copied.completedRows, 4)
+            XCTAssertEqual(history.map(\.kind), sourceHistory.map(\.kind))
+            XCTAssertTrue(Set(history.map(\.id)).isDisjoint(with: Set(sourceHistory.map(\.id))))
+            XCTAssertEqual(history.last?.undoneEventID, history[1].id)
+            XCTAssertEqual(try repo.checkpoints(for: copied.id).count, 1)
+            try repo.apply(.undo, to: copied.id)
+            XCTAssertEqual(try repo.piece(copied.id).completedRows, 3)
+            XCTAssertEqual(try repo.piece(piece.id).completedRows, 4)
+            let reopened = try RowRepository.open(storeURL: url)
+            XCTAssertEqual(try reopened.piece(copied.id).completedRows, 3)
+            _ = try BackupFormat.validate(manifest: reopened.projectSnapshot(for: copiedID), stagedDirectory: url.deletingLastPathComponent())
+        }
+    }
+
+    func testLibrarySaveFailuresRollbackAllRecords() throws {
+        try withStore { url in
+            let repo = try RowRepository(storeURL: url)
+            let project = try repo.createProject(title: "Original")
+            let piece = try repo.addPiece(to: project.id, name: "Body")
+            struct Fault: Error {}
+            repo.testSaveFault = { throw Fault() }
+            XCTAssertThrowsError(try repo.renameProject(project.id, title: "Changed"))
+            XCTAssertThrowsError(try repo.setProjectStatus(project.id, status: .archived))
+            XCTAssertThrowsError(try repo.duplicateProject(project.id, title: "Copy"))
+            XCTAssertThrowsError(try repo.apply(.completeRow, to: piece.id))
+            repo.testSaveFault = nil
+            let reopened = try RowRepository.open(storeURL: url)
+            XCTAssertEqual(try reopened.projects().map(\.title), ["Original"])
+            XCTAssertEqual(try reopened.librarySummaries().first?.status, .active)
+            XCTAssertNil(try reopened.librarySummaries().first?.lastWorkedAt)
+            XCTAssertEqual(try reopened.piece(piece.id).completedRows, 0)
+        }
+    }
+
+    func testActualPreLibrarySchemaMigratesWithoutLosingHistory() throws {
+        try withStore { url in
+            let id = UUID(), pieceID = UUID(), eventID = UUID()
+            let date = Date(timeIntervalSince1970: 1000)
+            // The old schema genuinely omits the new entity; changing a stamp
+            // in a current-schema container would not exercise migration.
+            do {
+                let oldSchema = Schema([StoredProject.self, StoredPiece.self, StoredRowEvent.self,
+                    StoredStoreInfo.self, StoredPatternDocument.self, StoredReferenceState.self,
+                    StoredShapingReminder.self, StoredProgressCheckpoint.self])
+                let config = ModelConfiguration("RowCompanion", schema: oldSchema, url: url, cloudKitDatabase: .none)
+                let container = try ModelContainer(for: oldSchema, configurations: [config])
+                let context = ModelContext(container)
+                context.insert(StoredStoreInfo(schemaVersion: 5, createdAt: date))
+                context.insert(StoredProject(id: id, title: "Legacy", createdAt: date, updatedAt: date))
+                context.insert(StoredPiece(id: pieceID, projectID: id, name: "Body", completedRows: 1, repeatLength: 8, notes: "Fixture"))
+                context.insert(StoredRowEvent(id: eventID, pieceID: pieceID, sequence: 1,
+                    kind: .completeRow, before: 0, after: 1, createdAt: date, undoneEventID: nil))
+                try context.save()
+            }
+            let migrated = try RowRepository.open(storeURL: url)
+            let summary = try XCTUnwrap(migrated.librarySummaries().first)
+            XCTAssertEqual(summary.status, .active)
+            XCTAssertEqual(summary.lastWorkedAt, date)
+            XCTAssertEqual(summary.completedRows, 1)
+            XCTAssertEqual(try migrated.history(for: pieceID).first?.id, eventID)
+            try migrated.setProjectStatus(id, status: .archived)
+            let reopened = try RowRepository.open(storeURL: url)
+            XCTAssertEqual(try reopened.librarySummaries().first?.status, .archived)
+            let context = ModelContext(reopened.container)
+            XCTAssertEqual(try context.fetch(FetchDescriptor<StoredStoreInfo>()).first?.schemaVersion, 6)
+            try reopened.deleteProject(id, confirmed: true)
+            XCTAssertTrue(try context.fetch(FetchDescriptor<StoredLibraryEntry>()).isEmpty)
+        }
+    }
+}
+
+extension ProjectLibraryTests {
+    func testLargeLibraryBulkSummariesIncludeLegacyAndCachedDates() throws {
+        try withStore { url in
+            let repo = try RowRepository(storeURL: url)
+            let context = ModelContext(repo.container)
+            let date = Date(timeIntervalSince1970: 1000)
+            var expected: [UUID: Date] = [:]
+            for index in 0..<300 {
+                let projectID = UUID()
+                context.insert(StoredProject(id: projectID, title: "Project \(index)", createdAt: date, updatedAt: date))
+                if index.isMultiple(of: 2) {
+                    context.insert(StoredLibraryEntry(projectID: projectID, statusRaw: "archived", lastWorkedAt: date))
+                    expected[projectID] = date
+                } else { expected[projectID] = date.addingTimeInterval(19) }
+                for _ in 0..<4 {
+                    let pieceID = UUID()
+                    context.insert(StoredPiece(id: pieceID, projectID: projectID, name: "Body", completedRows: 20, repeatLength: nil, notes: ""))
+                    for sequence in 1...20 {
+                        context.insert(StoredRowEvent(id: UUID(), pieceID: pieceID, sequence: sequence,
+                            kind: .completeRow, before: sequence - 1, after: sequence,
+                            createdAt: date.addingTimeInterval(Double(sequence - 1)), undoneEventID: nil))
+                    }
+                    context.insert(StoredRowEvent(id: UUID(), pieceID: pieceID, sequence: 21,
+                        kind: .repeatLengthChange, before: 20, after: 20,
+                        createdAt: date.addingTimeInterval(100), undoneEventID: nil))
+                }
+            }
+            try context.save()
+            let summaries = try repo.librarySummaries()
+            XCTAssertEqual(summaries.count, 300)
+            for summary in summaries {
+                XCTAssertEqual(summary.pieceCount, 4)
+                XCTAssertEqual(summary.completedRows, 80)
+                XCTAssertEqual(summary.lastWorkedAt, expected[summary.id])
+                XCTAssertEqual(summary.status, summary.lastWorkedAt == date ? .archived : .active)
+            }
+            XCTAssertEqual(try context.fetchCount(FetchDescriptor<StoredLibraryEntry>()), 150, "Reading legacy dates must not insert metadata")
+        }
+    }
+}

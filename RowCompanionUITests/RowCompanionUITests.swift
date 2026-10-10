@@ -390,3 +390,97 @@ final class RowCompanionUITests: XCTestCase {
         XCTAssertTrue(fullButton.isEnabled, "both acknowledgements enable the full backup")
     }
 }
+
+extension RowCompanionUITests {
+    func testLibraryDuplicateRenameArchiveSearchAndRelaunch() {
+        createProject("Library Scarf", piece: "Body", repeatLength: "8")
+        app.buttons["control.completeRow"].tap()
+        app.buttons["menu.add"].tap()
+        app.buttons["menu.library"].tap()
+        XCTAssertTrue(app.buttons["library.open.Library Scarf"].waitForExistence(timeout: 5))
+        app.buttons["library.sort"].tap()
+        app.buttons["Title"].tap()
+        app.buttons["library.actions.Library Scarf"].tap()
+        app.buttons["Duplicate setup"].tap()
+        XCTAssertTrue(app.switches["library.copyProgress"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.switches["library.copyProgress"].value as? String, "0")
+        app.buttons["library.save"].tap()
+        XCTAssertTrue(app.buttons["library.open.Library Scarf Copy"].waitForExistence(timeout: 5))
+        app.buttons["library.open.Library Scarf Copy"].tap()
+        XCTAssertTrue(app.staticTexts["row.completed"].label.contains("0"))
+        app.buttons["menu.add"].tap()
+        app.buttons["menu.library"].tap()
+        app.buttons["library.actions.Library Scarf Copy"].tap()
+        app.buttons["Rename"].tap()
+        let field = app.textFields["library.title"]
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.tap()
+        let existing = field.value as? String ?? ""
+        field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: existing.count) + "Renamed Copy")
+        app.buttons["library.save"].tap()
+        app.buttons["library.actions.Renamed Copy"].tap()
+        app.buttons["Mark Archived"].tap()
+        XCTAssertFalse(app.buttons["library.open.Renamed Copy"].exists)
+        app.buttons["library.status"].tap()
+        app.buttons["Archived"].tap()
+        XCTAssertTrue(app.buttons["library.open.Renamed Copy"].waitForExistence(timeout: 5))
+        app.terminate()
+        app.launchArguments = []
+        app.launch()
+        app.buttons["menu.add"].tap()
+        app.buttons["menu.library"].tap()
+        app.buttons["library.status"].tap()
+        app.buttons["Archived"].tap()
+        XCTAssertTrue(app.buttons["library.open.Renamed Copy"].waitForExistence(timeout: 5))
+        let search = app.searchFields.firstMatch
+        search.tap()
+        search.typeText("No match")
+        XCTAssertTrue(app.staticTexts["No matching projects."].waitForExistence(timeout: 5))
+    }
+}
+
+extension RowCompanionUITests {
+    func testLibraryExplicitProgressCopyCompletionAndDeleteCancellation() {
+        createProject("Progress Scarf", piece: "Body", repeatLength: "8")
+        app.buttons["control.completeRow"].tap()
+        app.buttons["control.completeRow"].tap()
+        app.buttons["menu.add"].tap()
+        app.buttons["menu.library"].tap()
+        app.buttons["library.actions.Progress Scarf"].tap()
+        app.buttons["Duplicate setup"].tap()
+        XCTAssertTrue(app.switches["library.copyProgress"].waitForExistence(timeout: 5))
+        let row = app.switches["library.copyProgress"]
+        let nestedSwitch = row.switches.firstMatch
+        let toggle = nestedSwitch.exists ? nestedSwitch : row
+        toggle.tap()
+        let enabled = NSPredicate { _, _ in toggle.value as? String == "1" }
+        let result = XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: enabled, object: nil)], timeout: 5)
+        XCTAssertEqual(result, .completed, "Copy progress must be on before saving")
+        guard result == .completed else { return }
+        app.buttons["library.save"].tap()
+        app.buttons["library.open.Progress Scarf Copy"].tap()
+        XCTAssertTrue(app.staticTexts["row.completed"].label.contains("2"))
+        app.buttons["control.undo"].tap()
+        XCTAssertTrue(app.staticTexts["row.completed"].label.contains("1"))
+        app.buttons["menu.add"].tap()
+        app.buttons["menu.library"].tap()
+        app.buttons["library.actions.Progress Scarf Copy"].tap()
+        app.buttons["Mark Completed"].tap()
+        app.buttons["library.status"].tap()
+        app.buttons["Completed"].tap()
+        app.buttons["library.actions.Progress Scarf Copy"].tap()
+        app.buttons["Delete…"].tap()
+        XCTAssertTrue(app.buttons["library.keepProject"].firstMatch.waitForExistence(timeout: 5))
+        app.buttons["library.keepProject"].firstMatch.tap()
+        XCTAssertTrue(app.buttons["library.open.Progress Scarf Copy"].exists)
+        app.buttons["library.actions.Progress Scarf Copy"].tap()
+        app.buttons["Delete…"].tap()
+        XCTAssertTrue(app.buttons["Delete Project"].waitForExistence(timeout: 5))
+        app.buttons["Delete Project"].tap()
+        XCTAssertTrue(app.staticTexts["No completed projects."].waitForExistence(timeout: 5))
+        app.buttons["library.status"].tap()
+        app.buttons["Active"].tap()
+        app.buttons["library.open.Progress Scarf"].tap()
+        XCTAssertTrue(app.staticTexts["row.completed"].label.contains("2"))
+    }
+}

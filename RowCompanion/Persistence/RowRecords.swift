@@ -90,3 +90,17 @@ public final class StoredRowEvent {
         )
     }
 }
+
+/// Additive v6 entity: legacy projects have no entry and read as active.
+/// Keeping the original entities unchanged enables SwiftData lightweight migration.
+@Model
+public final class StoredLibraryEntry {
+    @Attribute(.unique) public var projectID: UUID
+    public var statusRaw: String
+    public var lastWorkedAt: Date?
+    public init(projectID: UUID, statusRaw: String = "active", lastWorkedAt: Date? = nil) {
+        self.projectID = projectID
+        self.statusRaw = statusRaw
+        self.lastWorkedAt = lastWorkedAt
+    }
+}
