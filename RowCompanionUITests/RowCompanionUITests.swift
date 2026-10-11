@@ -467,14 +467,20 @@ extension RowCompanionUITests {
         XCTAssertTrue(focusCompleted.label.contains("Completed rows 1"))
 
         // Both optional modes are opt-in switches present in the mode.
-        let haptics = app.switches["focus.haptics"]
-        XCTAssertTrue(haptics.waitForExistence(timeout: 5))
-        let keepAwake = app.switches["focus.keepAwake"]
+        let hapticsRow = app.switches["focus.haptics"]
+        XCTAssertTrue(hapticsRow.waitForExistence(timeout: 5))
+        let nestedHaptics = hapticsRow.switches.firstMatch
+        let haptics = nestedHaptics.exists ? nestedHaptics : hapticsRow
+        XCTAssertEqual(haptics.value as? String, "0", "haptics must default off")
+        let keepAwakeRow = app.switches["focus.keepAwake"]
+        let nestedSwitch = keepAwakeRow.switches.firstMatch
+        let keepAwake = nestedSwitch.exists ? nestedSwitch : keepAwakeRow
         XCTAssertEqual(keepAwake.value as? String, "0", "keep-awake must default off")
         keepAwake.tap()
         let on = NSPredicate { _, _ in keepAwake.value as? String == "1" }
-        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: on, object: nil)], timeout: 5),
-                       .completed, "keep-awake must flip on tap")
+        let onResult = XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: on, object: nil)], timeout: 5)
+        XCTAssertEqual(onResult, .completed, "keep-awake must flip on tap")
+        guard onResult == .completed else { return }
         keepAwake.tap()
         let off = NSPredicate { _, _ in keepAwake.value as? String == "0" }
         XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: off, object: nil)], timeout: 5),
