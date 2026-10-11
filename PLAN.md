@@ -70,3 +70,15 @@ Bundle ID `com.infinityball.rowcompanion` registered: `CREATED com.infinityball.
 - Backup privacy and corruption: preview, validation, staged restore, no overwrite, explicit OS-backup limitations.
 - Native fold SDK unknown: standard phone/tablet implementation remains fully useful; future migration is optional.
 - No yarn inventory, timers, accounts, cloud sync, nested pattern interpreter, AI, OCR, stitch sensing, medical advice, or safety-critical role.
+
+### Issue #14 — project library
+
+Native library sheet reuses the existing workspace selection and persistence
+owner. Additive store v6 preserves legacy entity shapes and portable backup
+contracts. Active/archived/completed status is local organizational metadata;
+last worked tracks count actions only. Duplication uses a single record commit,
+fresh IDs (including undo targets), separate PDF copies, cleanup on failure,
+and defaults to fresh progress. Native disk-store and UI regression tests cover
+migration, independence, rollback, search, rename, status and deletion. macOS CI
+and real-device accessibility evidence remain required; host checks are not
+native acceptance.

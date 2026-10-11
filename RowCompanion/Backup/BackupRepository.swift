@@ -221,12 +221,15 @@ extension RowRepository {
 
         let reminders = try storedReminders(pieceIDs: pieceIDs)
         let checkpoints = try storedCheckpoints(pieceIDs: pieceIDs)
+        let libraryID = projectID
+        let libraryEntries = try context.fetch(FetchDescriptor<StoredLibraryEntry>(predicate: #Predicate { $0.projectID == libraryID }))
         for object in events { context.delete(object) }
         for object in references { context.delete(object) }
         for object in reminders { context.delete(object) }
         for object in checkpoints { context.delete(object) }
         for object in documents { context.delete(object) }
         for object in pieces { context.delete(object) }
+        for entry in libraryEntries { context.delete(entry) }
         context.delete(project)
         do {
             try commit()
