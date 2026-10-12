@@ -194,7 +194,12 @@ extension RowRepository {
             ))
         }
         for event in manifest.counterEvents {
-            context.insert(StoredCounterEvent(event))
+            context.insert(StoredCounterEvent(CounterEvent(
+                id: event.id, counterID: event.counterID, sequence: event.sequence,
+                kind: event.kind, before: event.before, after: event.after,
+                rowEventID: event.rowEventID, undoneEventID: event.undoneEventID,
+                createdAt: event.createdAt
+            )))
         }
         do {
             try commit()
