@@ -78,6 +78,14 @@ public final class WorkspaceModel {
     public private(set) var crossingNotice: ReminderCrossingNotice?
     public private(set) var checkpoints: [ProgressCheckpointRecord] = []
     public private(set) var rowHistory: [RowEvent] = []
+    /// Named counters for the selected piece (issue #16), name-ordered.
+    public private(set) var counters: [NamedCounter] = []
+
+    /// Counters that will advance/undo together with the completed-row counter.
+    /// Shown next to the row controls so the affected group is explicit.
+    public var linkedCounterNames: [String] {
+        counters.filter(\.advancesWithRows).map(\.name)
+    }
 
     public let backups: BackupService
 
@@ -113,8 +121,17 @@ public final class WorkspaceModel {
         loadReference()
         loadReminders()
         loadCheckpoints()
+        loadCounters()
         loadRowHistory()
         refreshStatus()
+    }
+
+    private func loadCounters() {
+        guard let pieceID = selectedPieceID else {
+            counters = []
+            return
+        }
+        counters = (try? repository.counters(for: pieceID)) ?? []
     }
 
     /// Reminder reads can never touch counts; a failed read simply shows an
@@ -321,6 +338,52 @@ public final class WorkspaceModel {
         do {
             try repository.removeCheckpoint(id: checkpointID)
             loadCheckpoints()
+        } catch { reportPersist(error) }
+    }
+
+    // MARK: - Named counters (issue #16)
+
+    public func addCounter(name: String, unit: String, startingValue: Int, repeatLength: Int?, linked: Bool) {
+        guard let pieceID = selectedPieceID else { lastError = .noPieceSelected; return }
+        do {
+            _ = try repository.addCounter(to: pieceID, name: name, unit: unit,
+                startingValue: startingValue, repeatLength: repeatLength, advancesWithRows: linked)
+            loadCounters()
+        } catch { reportPersist(error) }
+    }
+
+    public func setCounterLink(_ id: UUID, linked: Bool) {
+        do {
+            try repository.setCounterLink(id, advancesWithRows: linked)
+            loadCounters()
+        } catch { reportPersist(error) }
+    }
+
+    public func advanceCounter(_ id: UUID) {
+        do {
+            _ = try repository.advanceCounter(id)
+            loadCounters()
+        } catch { reportPersist(error) }
+    }
+
+    public func undoCounter(_ id: UUID) {
+        do {
+            _ = try repository.undoCounter(id)
+            loadCounters()
+        } catch { reportPersist(error) }
+    }
+
+    public func correctCounter(_ id: UUID, to value: Int, reset: Bool) {
+        do {
+            _ = try repository.changeCounter(id, to: value, confirmed: true, reset: reset)
+            loadCounters()
+        } catch { reportPersist(error) }
+    }
+
+    public func removeCounter(_ id: UUID) {
+        do {
+            try repository.removeCounter(id: id)
+            loadCounters()
         } catch { reportPersist(error) }
     }
 
@@ -591,6 +654,7 @@ public final class WorkspaceModel {
         }
         if keepReference { reference = previousReference }
         loadRowHistory()
+        loadCounters()
     }
 
     private func refreshStatus() {

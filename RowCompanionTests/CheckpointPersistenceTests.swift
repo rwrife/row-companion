@@ -104,13 +104,13 @@ final class CheckpointPersistenceTests: XCTestCase {
         XCTAssertEqual(try relaunched.history(for: restoredPiece.id).last?.kind, .correction)
     }
 
-    func testLegacyBackupDecodesWithoutCheckpointsAndNewExportsRequireV2() throws {
+    func testLegacyBackupDecodesWithoutCheckpointsAndNewExportsRequireV3() throws {
         let repo = try RowRepository(storeURL: storeURL)
         let project = try repo.createProject(title: "Legacy")
         let data = try BackupService(repository: repo).exportProgress(for: project.id)
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
-        XCTAssertEqual(try decoder.decode(BackupFormat.Manifest.self, from: data).schemaVersion, 2)
+        XCTAssertEqual(try decoder.decode(BackupFormat.Manifest.self, from: data).schemaVersion, 3)
         var legacy = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
         legacy.removeValue(forKey: "checkpoints")
         legacy["schemaVersion"] = 1
