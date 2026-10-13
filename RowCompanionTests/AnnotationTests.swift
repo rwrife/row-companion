@@ -72,7 +72,12 @@ final class AnnotationTests: XCTestCase {
         XCTAssertEqual(try repo.projectSnapshot(for: project.id).annotations.first?.id, item.id)
         let manifest = try repo.projectSnapshot(for: project.id)
         let stage = directory.appendingPathComponent("stage", isDirectory: true)
-        try FileManager.default.createDirectory(at: stage, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: stage.appendingPathComponent("originals", isDirectory: true),
+                                                withIntermediateDirectories: true)
+        let pdfName = manifest.documents.first!.relativePath.components(separatedBy: "/").last!
+        try Data(contentsOf: directory.appendingPathComponent("private-chart.pdf"))
+            .write(to: stage.appendingPathComponent("originals", isDirectory: true)
+                           .appendingPathComponent(pdfName))
         let validated = try BackupFormat.validate(manifest: manifest, stagedDirectory: stage)
         let remapped = BackupFormat.remap(validated, newIDs: { UUID() })
         XCTAssertNotEqual(remapped.manifest.annotations.first?.id, item.id)
