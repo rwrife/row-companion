@@ -142,6 +142,23 @@ Repository Actions secrets configured: `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_P
 
 MIT code/docs license; user-supplied patterns retain their own licenses.
 
+## Focused counting mode (issue #19)
+
+Open **Add → Focused counting** for an uncluttered full-screen view of the
+selected piece: a large Dynamic Type-scaled completed-row readout, the next
+repeat row, and always-reachable Complete row / Undo controls. Entering or
+leaving the mode never changes counts, the selected piece, the PDF page/zoom,
+the reading guide, or notes — it is a presentation of the same durable
+workspace state, so exiting returns the pattern exactly where it was. A failed
+save shows distinct "Count not saved" copy and never buzzes or advances the
+readout. Two explicit opt-in switches (both default off, remembered locally):
+haptic confirmation after a *successful saved* row action (suppressed when
+Reduce Motion is on) and keep-screen-awake active only while the focused
+workspace is foregrounded, restored on exit or backgrounding. No new
+permissions are requested. Simulator journeys prove count/piece/notes
+continuity across entry and exit; large-text, VoiceOver, contrast, and real
+haptics remain physical-device acceptance under issue #6.
+
 ## Local project library (issue #14)
 
 Open **Add → Project Library** to browse active, archived, or completed projects.

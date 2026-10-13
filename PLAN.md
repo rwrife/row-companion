@@ -82,3 +82,15 @@ and defaults to fresh progress. Native disk-store and UI regression tests cover
 migration, independence, rollback, search, rename, status and deletion. macOS CI
 and real-device accessibility evidence remain required; host checks are not
 native acceptance.
+
+### Issue #19 — focused counting mode
+
+A full-screen presentation of the currently selected piece without altering
+durable state, layout, PDF viewport, or notes. Large Dynamic Type-scaled
+completed-row and next-repeat readouts keep Complete row and Undo reachable.
+Complete/undo methods return the save outcome so haptics only trigger on a
+confirmed commit and stay suppressed under Reduce Motion. Keep-screen-awake is
+an explicit local opt-in active strictly while the focused view is
+foregrounded, restoring the normal idle timer on exit, backgrounding, or
+app termination. No schema migrations or permissions are added. Physical
+VoiceOver, haptic sensation, and hardware idle behavior remain gated under #6.

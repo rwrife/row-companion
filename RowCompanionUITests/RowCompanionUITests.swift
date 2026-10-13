@@ -440,6 +440,66 @@ extension RowCompanionUITests {
 }
 
 extension RowCompanionUITests {
+    /// Issue #19: focused counting shows the same selected piece, completes
+    /// and undoes rows, and exiting returns the workspace with the count,
+    /// piece selection, and notes surface exactly as they were. The two
+    /// optional modes are explicit opt-ins whose switches are reachable.
+    func testFocusedCountingKeepsProgressAndWorkspaceAcrossExit() {
+        createProject("Focus Scarf", piece: "Front", repeatLength: "8")
+        let complete = app.buttons["control.completeRow"]
+        XCTAssertTrue(complete.waitForExistence(timeout: 5))
+        complete.tap()
+        let completed = app.staticTexts["row.completed"]
+        XCTAssertTrue(completed.label.contains("1"))
+
+        app.buttons["menu.add"].tap()
+        app.buttons["focus.enter"].tap()
+        let focusCompleted = app.staticTexts["focus.completed"]
+        XCTAssertTrue(focusCompleted.waitForExistence(timeout: 5))
+        XCTAssertTrue(focusCompleted.label.contains("Completed rows 1"))
+        XCTAssertTrue(app.staticTexts["focus.piece"].label.contains("Front"))
+        XCTAssertTrue(app.staticTexts["focus.next"].label.contains("Next repeat row 2"))
+
+        app.buttons["focus.complete"].tap()
+        XCTAssertTrue(focusCompleted.label.contains("Completed rows 2"))
+        XCTAssertTrue(app.staticTexts["focus.next"].label.contains("Next repeat row 3"))
+        app.buttons["focus.undo"].tap()
+        XCTAssertTrue(focusCompleted.label.contains("Completed rows 1"))
+
+        // Both optional modes are opt-in switches present in the mode.
+        let hapticsRow = app.switches["focus.haptics"]
+        XCTAssertTrue(hapticsRow.waitForExistence(timeout: 5))
+        let nestedHaptics = hapticsRow.switches.firstMatch
+        let haptics = nestedHaptics.exists ? nestedHaptics : hapticsRow
+        XCTAssertEqual(haptics.value as? String, "0", "haptics must default off")
+        let keepAwakeRow = app.switches["focus.keepAwake"]
+        let nestedSwitch = keepAwakeRow.switches.firstMatch
+        let keepAwake = nestedSwitch.exists ? nestedSwitch : keepAwakeRow
+        XCTAssertEqual(keepAwake.value as? String, "0", "keep-awake must default off")
+        keepAwake.tap()
+        let on = NSPredicate { _, _ in keepAwake.value as? String == "1" }
+        let onResult = XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: on, object: nil)], timeout: 5)
+        XCTAssertEqual(onResult, .completed, "keep-awake must flip on tap")
+        guard onResult == .completed else { return }
+        keepAwake.tap()
+        let off = NSPredicate { _, _ in keepAwake.value as? String == "0" }
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: off, object: nil)], timeout: 5),
+                       .completed, "keep-awake must flip back off")
+
+        app.buttons["focus.exit"].tap()
+        XCTAssertFalse(focusCompleted.exists, "focus cover must be dismissed")
+        XCTAssertTrue(completed.waitForExistence(timeout: 5))
+        XCTAssertTrue(completed.label.contains("Completed rows 1"),
+                      "entering and exiting focus must not change the count")
+        XCTAssertTrue(app.staticTexts["row.next"].label.contains("Next repeat row 2"))
+        XCTAssertTrue(app.textViews["control.notes"].exists,
+                      "the normal workspace (with its notes surface) resumes intact")
+        XCTAssertTrue(app.buttons["control.piece"].label.contains("Front"),
+                      "selected piece survives focus entry/exit")
+    }
+}
+
+extension RowCompanionUITests {
     func testLibraryExplicitProgressCopyCompletionAndDeleteCancellation() {
         createProject("Progress Scarf", piece: "Body", repeatLength: "8")
         app.buttons["control.completeRow"].tap()
