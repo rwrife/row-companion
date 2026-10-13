@@ -81,8 +81,9 @@ public enum BackupError: Error, Equatable, Sendable {
 /// SwiftUI — the whole hostile-input surface is testable off-device.
 public enum BackupFormat {
     /// Manifest schema version written into every snapshot.
-    /// v2 adds `checkpoints` (issue #18).
-    public static let schemaVersion = 2
+    /// v2 adds `checkpoints` (issue #18). v3 adds `counters` and
+    /// `counterEvents` (issue #16); older manifests decode as empty.
+    public static let schemaVersion = 3
     /// Restores refuse manifests stamped by a future schema (fail closed).
     public static let minimumSupportedVersion = 1
     /// Combined file-size cap for a staged restore (PLAN.md: 200 MiB).
@@ -153,6 +154,29 @@ public enum BackupFormat {
         public var createdAt: Date
     }
 
+    public struct CounterSnapshot: Codable, Equatable, Sendable {
+        public var id: UUID
+        public var pieceID: UUID
+        public var name: String
+        public var unit: String
+        public var startingValue: Int
+        public var value: Int
+        public var repeatLength: Int?
+        public var advancesWithRows: Bool
+    }
+
+    public struct CounterEventSnapshot: Codable, Equatable, Sendable {
+        public var id: UUID
+        public var counterID: UUID
+        public var sequence: Int
+        public var kind: CounterEventKind
+        public var before: Int
+        public var after: Int
+        public var rowEventID: UUID?
+        public var undoneEventID: UUID?
+        public var createdAt: Date
+    }
+
     /// The versioned manifest written at export time.
     public struct Manifest: Codable, Equatable, Sendable {
         public var schemaVersion: Int
@@ -164,9 +188,12 @@ public enum BackupFormat {
         public var documents: [DocumentSnapshot]
         public var references: [ReferenceSnapshot]
         public var checkpoints: [CheckpointSnapshot]
+        public var counters: [CounterSnapshot]
+        public var counterEvents: [CounterEventSnapshot]
 
         enum CodingKeys: String, CodingKey {
             case schemaVersion, createdAt, includesOriginals, project, pieces, events, documents, references, checkpoints
+            case counters, counterEvents
         }
 
         public init(from decoder: Decoder) throws {
@@ -180,6 +207,8 @@ public enum BackupFormat {
             documents = try container.decode([DocumentSnapshot].self, forKey: .documents)
             references = try container.decode([ReferenceSnapshot].self, forKey: .references)
             checkpoints = try container.decodeIfPresent([CheckpointSnapshot].self, forKey: .checkpoints) ?? []
+            counters = try container.decodeIfPresent([CounterSnapshot].self, forKey: .counters) ?? []
+            counterEvents = try container.decodeIfPresent([CounterEventSnapshot].self, forKey: .counterEvents) ?? []
         }
 
         public init(
@@ -191,7 +220,9 @@ public enum BackupFormat {
             events: [EventSnapshot],
             documents: [DocumentSnapshot],
             references: [ReferenceSnapshot],
-            checkpoints: [CheckpointSnapshot] = []
+            checkpoints: [CheckpointSnapshot] = [],
+            counters: [CounterSnapshot] = [],
+            counterEvents: [CounterEventSnapshot] = []
         ) {
             self.schemaVersion = schemaVersion
             self.createdAt = createdAt
@@ -202,6 +233,8 @@ public enum BackupFormat {
             self.documents = documents
             self.references = references
             self.checkpoints = checkpoints
+            self.counters = counters
+            self.counterEvents = counterEvents
         }
     }
 
@@ -318,6 +351,72 @@ public enum BackupFormat {
                 throw BackupError.invalidCountOrHistory(detail: "invalid checkpoint")
             }
             checkpointNames[checkpoint.pieceID, default: []].append(checkpoint.name.trimmingCharacters(in: .whitespacesAndNewlines))
+        }
+
+        // --- Named counters (issue #16) -------------------------------------
+        var seenCounterIDs: Set<UUID> = []
+        for counter in manifest.counters {
+            guard seenCounterIDs.insert(counter.id).inserted else {
+                throw BackupError.duplicateID(kind: "counter", id: counter.id.uuidString)
+            }
+            guard seenPieceIDs.contains(counter.pieceID) else {
+                throw BackupError.danglingReference(kind: "piece", id: counter.pieceID.uuidString)
+            }
+            guard CounterRules.valid(name: counter.name, unit: counter.unit,
+                                     startingValue: counter.startingValue, repeatLength: counter.repeatLength),
+                  RowArithmetic.isValid(completedRows: counter.value)
+            else {
+                throw BackupError.invalidCountOrHistory(detail: "invalid counter")
+            }
+        }
+        var seenCounterEventIDs: Set<UUID> = []
+        let counterIDs: Set<UUID> = Set(manifest.counters.map(\.id))
+        let rowEventIDs: Set<UUID> = Set(manifest.events.map(\.id))
+        var eventsByCounter: [UUID: [CounterEventSnapshot]] = [:]
+        for event in manifest.counterEvents {
+            guard seenCounterEventIDs.insert(event.id).inserted else {
+                throw BackupError.duplicateID(kind: "counter event", id: event.id.uuidString)
+            }
+            guard counterIDs.contains(event.counterID) else {
+                throw BackupError.danglingReference(kind: "counter", id: event.counterID.uuidString)
+            }
+            if let rowEventID = event.rowEventID, !rowEventIDs.contains(rowEventID) {
+                throw BackupError.danglingReference(kind: "row event", id: rowEventID.uuidString)
+            }
+            guard RowArithmetic.isValid(completedRows: event.before),
+                  RowArithmetic.isValid(completedRows: event.after) else {
+                throw BackupError.invalidCountOrHistory(detail: "counter event out of range")
+            }
+            eventsByCounter[event.counterID, default: []].append(event)
+        }
+        for event in manifest.counterEvents where event.undoneEventID != nil {
+            guard let undone = event.undoneEventID,
+                  let target = manifest.counterEvents.first(where: { $0.id == undone }),
+                  target.counterID == event.counterID,
+                  target.sequence < event.sequence,
+                  target.kind == .advance || target.kind == .correction || target.kind == .reset else {
+                throw BackupError.invalidCountOrHistory(detail: "counter undo reverses nothing valid")
+            }
+        }
+        for counter in manifest.counters {
+            let events = (eventsByCounter[counter.id] ?? []).sorted {
+                if $0.sequence != $1.sequence { return $0.sequence < $1.sequence }
+                return $0.createdAt < $1.createdAt
+            }
+            for (index, event) in events.enumerated() where event.sequence != index + 1 {
+                throw BackupError.invalidCountOrHistory(detail: "counter \(counter.name.prefix(20)) history is not a dense sequence")
+            }
+            // Replay every change, including correction, reset and undo.
+            var replayed = counter.startingValue
+            for event in events {
+                guard event.before == replayed else {
+                    throw BackupError.invalidCountOrHistory(detail: "counter \(counter.name.prefix(20)) history is discontinuous")
+                }
+                replayed = event.after
+            }
+            guard replayed == counter.value else {
+                throw BackupError.invalidCountOrHistory(detail: "counter \(counter.name.prefix(20)) does not match history")
+            }
         }
 
         // --- Row count / history consistency --------------------------------
@@ -538,6 +637,23 @@ public enum BackupFormat {
                 repeatLength: checkpoint.repeatLength, createdAt: checkpoint.createdAt
             )
         }
+        let counters = manifest.counters.map { counter in
+            CounterSnapshot(
+                id: mapped(counter.id), pieceID: mapped(counter.pieceID),
+                name: counter.name, unit: counter.unit, startingValue: counter.startingValue,
+                value: counter.value, repeatLength: counter.repeatLength,
+                advancesWithRows: counter.advancesWithRows
+            )
+        }
+        let counterEvents = manifest.counterEvents.map { event in
+            CounterEventSnapshot(
+                id: mapped(event.id), counterID: mapped(event.counterID),
+                sequence: event.sequence, kind: event.kind, before: event.before,
+                after: event.after, rowEventID: event.rowEventID.map { mapped($0) },
+                undoneEventID: event.undoneEventID.map { mapped($0) },
+                createdAt: event.createdAt
+            )
+        }
         let bytes = Dictionary(uniqueKeysWithValues: validated.documentBytes.map { (mapped($0.key), $0.value) })
         return ProjectSnapshotBundle(
             manifest: Manifest(
@@ -549,7 +665,9 @@ public enum BackupFormat {
                 events: events,
                 documents: documents,
                 references: references,
-                checkpoints: checkpoints
+                checkpoints: checkpoints,
+                counters: counters,
+                counterEvents: counterEvents
             ),
             documentBytes: bytes
         )

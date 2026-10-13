@@ -165,6 +165,9 @@ private struct ControlPane: View {
     @State private var showHistory = false
     @State private var showCheckpointComposer = false
     @State private var checkpointToRestore: ProgressCheckpointRecord?
+    @State private var showCounterComposer = false
+    @State private var counterToCorrect: NamedCounter?
+    @State private var counterCorrectionText = ""
 
     var body: some View {
         ScrollView {
@@ -183,6 +186,7 @@ private struct ControlPane: View {
                             .accessibilityIdentifier("reminder.dueBanner")
                     }
                     repeatPicker(piece: piece)
+                    countersSection()
                     if model.referenceDocumentURL != nil {
                         guideSlider
                     }
@@ -296,6 +300,71 @@ private struct ControlPane: View {
             } message: {
                 Text("Replace the completed-row count? This records a correction in the piece history; Cancel keeps the current count.")
             }
+        }
+    }
+
+    private func countersSection() -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Extra counters")
+                .font(.headline)
+            if !model.linkedCounterNames.isEmpty {
+                Text("Complete row and Undo also change: " + model.linkedCounterNames.joined(separator: ", "))
+                    .font(.callout)
+                    .accessibilityIdentifier("counter.linkedGroup")
+            }
+            ForEach(model.counters) { counter in
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("\(counter.name): \(counter.value)\(counter.unit.isEmpty ? "" : " " + counter.unit)"
+                        + (counter.nextRepeat.map { " · next repeat row \($0)" } ?? ""))
+                        .accessibilityIdentifier("counter.value")
+                    HStack {
+                        Button("Add 1") { model.advanceCounter(counter.id) }
+                            .accessibilityIdentifier("button.counter.advance")
+                        Button("Undo") { model.undoCounter(counter.id) }
+                            .accessibilityIdentifier("button.counter.undo")
+                        Button("Correct…") {
+                            counterToCorrect = counter
+                            counterCorrectionText = String(counter.value)
+                        }
+                        .accessibilityIdentifier("button.counter.correct")
+                        Button("Remove", role: .destructive) { model.removeCounter(counter.id) }
+                            .accessibilityIdentifier("button.counter.remove")
+                    }
+                    Toggle("Advance with Complete row", isOn: Binding(
+                        get: { counter.advancesWithRows },
+                        set: { model.setCounterLink(counter.id, linked: $0) }
+                    ))
+                    .accessibilityIdentifier("toggle.counter.link")
+                }
+            }
+            Button("Add counter…") { showCounterComposer = true }
+                .frame(minHeight: 44)
+                .accessibilityIdentifier("button.addCounter")
+        }
+        .sheet(isPresented: $showCounterComposer) {
+            CounterComposer(isPresented: $showCounterComposer)
+        }
+        .alert("Correct counter", isPresented: Binding(
+            get: { counterToCorrect != nil },
+            set: { if !$0 { counterToCorrect = nil } }
+        )) {
+            TextField("Value", text: $counterCorrectionText).keyboardType(.numberPad)
+            Button("Apply correction", role: .destructive) {
+                if let counter = counterToCorrect {
+                    model.correctCounter(counter.id, to: Int(counterCorrectionText) ?? -1, reset: false)
+                }
+                counterToCorrect = nil
+            }
+            .accessibilityIdentifier("button.counter.applyCorrection")
+            Button("Reset to start", role: .destructive) {
+                if let counter = counterToCorrect {
+                    model.correctCounter(counter.id, to: counter.startingValue, reset: true)
+                }
+                counterToCorrect = nil
+            }
+            Button("Cancel", role: .cancel) { counterToCorrect = nil }
+        } message: {
+            Text("This changes only this extra counter and records the change in its own history. Completed rows stay as they are.")
         }
     }
 
@@ -489,6 +558,59 @@ private struct ReminderComposer: View {
             validationMessage = error.userMessage
         } else {
             isPresented = false
+        }
+    }
+}
+
+private struct CounterComposer: View {
+    @Environment(WorkspaceModel.self) private var model
+    @Binding var isPresented: Bool
+    @State private var name = ""
+    @State private var unit = ""
+    @State private var startingValue = "0"
+    @State private var repeatLength = ""
+    @State private var linked = false
+    @State private var validationMessage: String?
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                TextField("Counter name (e.g. Sleeves, Cable motif)", text: $name)
+                    .accessibilityIdentifier("field.counter.name")
+                TextField("Unit (optional, e.g. rows, repeats)", text: $unit)
+                    .accessibilityIdentifier("field.counter.unit")
+                TextField("Starting value", text: $startingValue)
+                    .keyboardType(.numberPad)
+                    .accessibilityIdentifier("field.counter.start")
+                TextField("Repeat length (optional)", text: $repeatLength)
+                    .keyboardType(.numberPad)
+                    .accessibilityIdentifier("field.counter.repeat")
+                Toggle("Advance with Complete row", isOn: $linked)
+                    .accessibilityIdentifier("toggle.counter.composerLink")
+                Text("Extra counters are piece-specific. Linked counters advance atomically whenever Complete row is tapped; unlinked counters advance only when their own button is tapped.")
+                if let validationMessage { Text(validationMessage) }
+            }
+            .navigationTitle("Add extra counter")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { isPresented = false }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        let start = Int(startingValue) ?? 0
+                        let repeatLen = repeatLength.isEmpty ? nil : Int(repeatLength)
+                        model.lastError = nil
+                        model.addCounter(name: name, unit: unit, startingValue: start,
+                                         repeatLength: repeatLen, linked: linked)
+                        if let error = model.lastError {
+                            validationMessage = error.userMessage
+                        } else {
+                            isPresented = false
+                        }
+                    }
+                    .accessibilityIdentifier("button.counter.save")
+                }
+            }
         }
     }
 }

@@ -41,7 +41,24 @@ extension RowRepository {
         var events: [BackupFormat.EventSnapshot] = []
         var references: [BackupFormat.ReferenceSnapshot] = []
         var checkpoints: [BackupFormat.CheckpointSnapshot] = []
+        var counters: [BackupFormat.CounterSnapshot] = []
+        var counterEvents: [BackupFormat.CounterEventSnapshot] = []
         for piece in pieces {
+            for counter in try self.counters(for: piece.id) {
+                counters.append(BackupFormat.CounterSnapshot(
+                    id: counter.id, pieceID: counter.pieceID, name: counter.name,
+                    unit: counter.unit, startingValue: counter.startingValue, value: counter.value,
+                    repeatLength: counter.repeatLength, advancesWithRows: counter.advancesWithRows
+                ))
+                for event in try counterHistory(for: counter.id) {
+                    counterEvents.append(BackupFormat.CounterEventSnapshot(
+                        id: event.id, counterID: event.counterID, sequence: event.sequence,
+                        kind: event.kind, before: event.before, after: event.after,
+                        rowEventID: event.rowEventID, undoneEventID: event.undoneEventID,
+                        createdAt: event.createdAt
+                    ))
+                }
+            }
             for checkpoint in try self.checkpoints(for: piece.id) {
                 checkpoints.append(BackupFormat.CheckpointSnapshot(
                     id: checkpoint.id, pieceID: checkpoint.pieceID,
@@ -102,7 +119,9 @@ extension RowRepository {
             events: events,
             documents: documentSnapshots,
             references: references,
-            checkpoints: checkpoints
+            checkpoints: checkpoints,
+            counters: counters,
+            counterEvents: counterEvents
         )
     }
 
@@ -167,6 +186,21 @@ extension RowRepository {
                 createdAt: checkpoint.createdAt
             ))
         }
+        for counter in manifest.counters {
+            context.insert(StoredNamedCounter(
+                id: counter.id, pieceID: counter.pieceID, name: counter.name, unit: counter.unit,
+                startingValue: counter.startingValue, value: counter.value,
+                repeatLength: counter.repeatLength, advancesWithRows: counter.advancesWithRows
+            ))
+        }
+        for event in manifest.counterEvents {
+            context.insert(StoredCounterEvent(CounterEvent(
+                id: event.id, counterID: event.counterID, sequence: event.sequence,
+                kind: event.kind, before: event.before, after: event.after,
+                rowEventID: event.rowEventID, undoneEventID: event.undoneEventID,
+                createdAt: event.createdAt
+            )))
+        }
         do {
             try commit()
         } catch {
@@ -221,12 +255,17 @@ extension RowRepository {
 
         let reminders = try storedReminders(pieceIDs: pieceIDs)
         let checkpoints = try storedCheckpoints(pieceIDs: pieceIDs)
+        let counters = try context.fetch(FetchDescriptor<StoredNamedCounter>(predicate: #Predicate { pieceIDs.contains($0.pieceID) }))
+        let counterIDs = Set(counters.map(\.id))
+        let counterEvents = try context.fetch(FetchDescriptor<StoredCounterEvent>(predicate: #Predicate { counterIDs.contains($0.counterID) }))
         let libraryID = projectID
         let libraryEntries = try context.fetch(FetchDescriptor<StoredLibraryEntry>(predicate: #Predicate { $0.projectID == libraryID }))
         for object in events { context.delete(object) }
         for object in references { context.delete(object) }
         for object in reminders { context.delete(object) }
         for object in checkpoints { context.delete(object) }
+        for object in counterEvents { context.delete(object) }
+        for object in counters { context.delete(object) }
         for object in documents { context.delete(object) }
         for object in pieces { context.delete(object) }
         for entry in libraryEntries { context.delete(entry) }
