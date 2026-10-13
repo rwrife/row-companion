@@ -22,6 +22,8 @@ public enum RowRepositoryError: Error, Equatable {
     /// would leave a member counter divergent (issue #16).
     case counterInvalid
     case counterNotFound(UUID)
+    /// A document annotation as authored failed validation (issue #17).
+    case annotationInvalid
 }
 
 /// Local-first, transactional row repository.
@@ -314,7 +316,7 @@ public final class RowRepository {
         return try context.fetch(descriptor).first != nil
     }
 
-    private func storedDocument(_ documentID: UUID) throws -> StoredPatternDocument? {
+    func storedDocument(_ documentID: UUID) throws -> StoredPatternDocument? {
         let id = documentID
         let descriptor = FetchDescriptor<StoredPatternDocument>(predicate: #Predicate { $0.id == id })
         return try context.fetch(descriptor).first
@@ -442,6 +444,14 @@ extension RowRepository {
                 documentIDs[document.id] = documentID
                 context.insert(StoredPatternDocument(id: documentID, projectID: newID,
                     relativePath: "RowCompanionImported/" + filename, sha256: document.sha256, pageCount: document.pageCount))
+                // Issue #17: annotations belong to the document, so a copy
+                // starts from the same marked-up chart. Anchors stay valid —
+                // the bytes (and page count) are the validated original.
+                for item in try annotations(for: document.id) {
+                    context.insert(StoredDocumentAnnotation(DocumentAnnotation(
+                        id: UUID(), documentID: documentID, kind: item.kind, title: item.title,
+                        pageIndex: item.pageIndex, rect: item.rect, createdAt: item.createdAt)))
+                }
             }
             let now = Date()
             context.insert(StoredProject(id: newID, title: title, createdAt: now, updatedAt: now))

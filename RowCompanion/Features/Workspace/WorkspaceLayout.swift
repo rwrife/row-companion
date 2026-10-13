@@ -102,6 +102,8 @@ private struct ReferencePane: View {
                         pieceID: model.selectedPieceID ?? UUID(),
                         documentID: nil, pageIndex: 0, visibleRect: .full, guideY: nil
                     ),
+                    highlights: model.annotations,
+                    navigationTarget: model.annotationTarget,
                     onMoved: { page, rect in
                         model.viewerMoved(pageIndex: page, visibleRect: rect)
                     }
@@ -168,6 +170,9 @@ private struct ControlPane: View {
     @State private var showCounterComposer = false
     @State private var counterToCorrect: NamedCounter?
     @State private var counterCorrectionText = ""
+    @State private var annotationKind: DocumentAnnotation.Kind = .bookmark
+    @State private var annotationTitle = ""
+    @State private var showAnnotationComposer = false
 
     var body: some View {
         ScrollView {
@@ -189,6 +194,7 @@ private struct ControlPane: View {
                     countersSection()
                     if model.referenceDocumentURL != nil {
                         guideSlider
+                        annotationsSection()
                     }
                     notesEditor(piece: piece)
                     checkpointsSection(piece: piece)
@@ -299,6 +305,102 @@ private struct ControlPane: View {
                 Button("Cancel", role: .cancel) { }
             } message: {
                 Text("Replace the completed-row count? This records a correction in the piece history; Cancel keeps the current count.")
+            }
+        }
+    }
+
+    /// PDF annotations and bookmarks (issue #17). Fully operable via
+    /// accessible buttons: no required touch gestures on the PDF canvas.
+    private func annotationsSection() -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("Bookmarks & annotations")
+                    .font(.headline)
+                Spacer()
+                Button {
+                    showAnnotationComposer = true
+                } label: {
+                    Label("Add", systemImage: "bookmark.badge.plus")
+                }
+                .accessibilityIdentifier("button.addAnnotation")
+            }
+            Text("Shared across every piece working from this pattern. Anchored to page and position.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            if model.annotations.isEmpty {
+                Text("No bookmarks or highlights yet.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(model.annotations) { item in
+                    HStack {
+                        Button {
+                            model.navigate(to: item)
+                        } label: {
+                            VStack(alignment: .leading, spacing: 2) {
+                                HStack {
+                                    Image(systemName: item.kind == .bookmark ? "bookmark" : (item.kind == .highlight ? "highlighter" : "note.text"))
+                                        .accessibilityHidden(true)
+                                    Text(item.title)
+                                        .font(.subheadline)
+                                        .bold()
+                                }
+                                Text("Page \(item.pageIndex + 1) · \(item.kind.rawValue)")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .accessibilityIdentifier("annotation.jump.\(item.id.uuidString.prefix(8))")
+                        Spacer()
+                        Button(role: .destructive) {
+                            model.removeAnnotation(item.id)
+                        } label: {
+                            Image(systemName: "trash")
+                        }
+                        .accessibilityIdentifier("annotation.delete.\(item.id.uuidString.prefix(8))")
+                    }
+                    .padding(.vertical, 2)
+                }
+            }
+        }
+        .padding()
+        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
+        .sheet(isPresented: $showAnnotationComposer) {
+            NavigationStack {
+                Form {
+                    Section("Kind") {
+                        Picker("Kind", selection: $annotationKind) {
+                            Text("Bookmark").tag(DocumentAnnotation.Kind.bookmark)
+                            Text("Highlight").tag(DocumentAnnotation.Kind.highlight)
+                            Text("Note").tag(DocumentAnnotation.Kind.note)
+                        }
+                        .pickerStyle(.segmented)
+                    }
+                    Section("Label") {
+                        TextField("e.g. Neck shaping row 1", text: $annotationTitle)
+                            .accessibilityIdentifier("field.annotationTitle")
+                    }
+                }
+                .navigationTitle("New annotation")
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel") {
+                            showAnnotationComposer = false
+                            annotationTitle = ""
+                        }
+                    }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Save") {
+                            let clean = annotationTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+                            guard !clean.isEmpty else { return }
+                            model.addAnnotation(kind: annotationKind, title: clean)
+                            showAnnotationComposer = false
+                            annotationTitle = ""
+                        }
+                        .accessibilityIdentifier("button.saveAnnotation")
+                        .disabled(annotationTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    }
+                }
             }
         }
     }

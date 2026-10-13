@@ -27,13 +27,14 @@ public enum RowStoreFactory {
     /// SwiftData performs additive lightweight migration; missing entries read
     /// as active, with last-worked derived from existing row events.
     /// v7 adds named counters and counter events without changing legacy entities.
-    public static let schemaVersion = 7
+    /// v8 adds project-document annotations without changing legacy entities.
+    public static let schemaVersion = 8
 
     public static var schema: Schema {
         Schema([StoredProject.self, StoredPiece.self, StoredRowEvent.self, StoredStoreInfo.self,
                 StoredPatternDocument.self, StoredReferenceState.self,
                 StoredShapingReminder.self, StoredProgressCheckpoint.self, StoredLibraryEntry.self,
-                StoredNamedCounter.self, StoredCounterEvent.self])
+                StoredNamedCounter.self, StoredCounterEvent.self, StoredDocumentAnnotation.self])
     }
 
     /// Local, non-mirrored configuration for the given store URL.

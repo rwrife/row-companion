@@ -50,6 +50,9 @@
 		F10000000000000000000012 /* CounterModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = E10000000000000000000012 /* CounterModels.swift */; };
 		F10000000000000000000013 /* CounterRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = E10000000000000000000013 /* CounterRepository.swift */; };
 		F10000000000000000000014 /* CounterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E10000000000000000000014 /* CounterTests.swift */; };
+		F10000000000000000000015 /* DocumentAnnotations.swift in Sources */ = {isa = PBXBuildFile; fileRef = E10000000000000000000015 /* DocumentAnnotations.swift */; };
+		F10000000000000000000016 /* AnnotationRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = E10000000000000000000016 /* AnnotationRepository.swift */; };
+		F10000000000000000000017 /* AnnotationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E10000000000000000000017 /* AnnotationTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -116,6 +119,9 @@
 		E10000000000000000000012 /* CounterModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CounterModels.swift; sourceTree = "<group>"; };
 		E10000000000000000000013 /* CounterRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CounterRepository.swift; sourceTree = "<group>"; };
 		E10000000000000000000014 /* CounterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CounterTests.swift; sourceTree = "<group>"; };
+		E10000000000000000000015 /* DocumentAnnotations.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentAnnotations.swift; sourceTree = "<group>"; };
+		E10000000000000000000016 /* AnnotationRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnnotationRepository.swift; sourceTree = "<group>"; };
+		E10000000000000000000017 /* AnnotationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnnotationTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -190,6 +196,7 @@
 				E1000000000000000000000D /* ReminderPersistenceTests.swift */,
 				E10000000000000000000011 /* CheckpointPersistenceTests.swift */,
 				E10000000000000000000014 /* CounterTests.swift */,
+				E10000000000000000000017 /* AnnotationTests.swift */,
 				E30000000000000000000008 /* ViewportClampTests.swift */,
 				E30000000000000000000009 /* PDFImportTests.swift */,
 				E3000000000000000000000A /* ReferenceStateTests.swift */,
@@ -220,6 +227,7 @@
 				E1000000000000000000000A /* ReminderModels.swift */,
 				E1000000000000000000000E /* CheckpointModels.swift */,
 				E10000000000000000000012 /* CounterModels.swift */,
+				E10000000000000000000015 /* DocumentAnnotations.swift */,
 			);
 			path = Domain;
 			sourceTree = "<group>";
@@ -234,6 +242,7 @@
 				E1000000000000000000000B /* ReminderRepository.swift */,
 				E1000000000000000000000F /* CheckpointRepository.swift */,
 				E10000000000000000000013 /* CounterRepository.swift */,
+				E10000000000000000000016 /* AnnotationRepository.swift */,
 			);
 			path = Persistence;
 			sourceTree = "<group>";
@@ -425,6 +434,8 @@
 				F1000000000000000000000F /* CheckpointRepository.swift in Sources */,
 				F10000000000000000000012 /* CounterModels.swift in Sources */,
 				F10000000000000000000013 /* CounterRepository.swift in Sources */,
+				F10000000000000000000015 /* DocumentAnnotations.swift in Sources */,
+				F10000000000000000000016 /* AnnotationRepository.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -441,6 +452,7 @@
 				F1000000000000000000000D /* ReminderPersistenceTests.swift in Sources */,
 				F10000000000000000000011 /* CheckpointPersistenceTests.swift in Sources */,
 				F10000000000000000000014 /* CounterTests.swift in Sources */,
+				F10000000000000000000017 /* AnnotationTests.swift in Sources */,
 				F30000000000000000000008 /* ViewportClampTests.swift in Sources */,
 				F30000000000000000000009 /* PDFImportTests.swift in Sources */,
 				F3000000000000000000000A /* ReferenceStateTests.swift in Sources */,
