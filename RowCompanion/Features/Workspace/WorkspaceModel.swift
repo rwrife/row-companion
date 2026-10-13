@@ -80,6 +80,10 @@ public final class WorkspaceModel {
     public private(set) var rowHistory: [RowEvent] = []
     /// Named counters for the selected piece (issue #16), name-ordered.
     public private(set) var counters: [NamedCounter] = []
+    /// Project-scoped annotations for the selected app-owned PDF.
+    public private(set) var annotations: [DocumentAnnotation] = []
+    /// Explicit navigation target for the PDF viewer, independent of rows.
+    public var annotationTarget: DocumentAnnotation?
 
     /// Counters that will advance/undo together with the completed-row counter.
     /// Shown next to the row controls so the affected group is explicit.
@@ -118,7 +122,9 @@ public final class WorkspaceModel {
 
     private func selectPieceKeepState(_ id: UUID?) {
         selectedPieceID = id
+        annotationTarget = nil
         loadReference()
+        loadAnnotations()
         loadReminders()
         loadCheckpoints()
         loadCounters()
@@ -387,6 +393,38 @@ public final class WorkspaceModel {
         } catch { reportPersist(error) }
     }
 
+    // MARK: - Document annotations (issue #17; no row actions)
+
+    public func loadAnnotations() {
+        guard let documentID = reference?.documentID else { annotations = []; return }
+        do { annotations = try repository.annotations(for: documentID) }
+        catch { annotations = []; reportPersist(error) }
+    }
+
+    public func addAnnotation(kind: DocumentAnnotation.Kind, title: String) {
+        guard let state = reference, let documentID = state.documentID else {
+            lastError = .other("Open a pattern first."); return
+        }
+        do {
+            _ = try repository.addAnnotation(to: documentID, kind: kind, title: title,
+                pageIndex: state.pageIndex, rect: state.visibleRect)
+            loadAnnotations()
+        } catch { reportPersist(error) }
+    }
+
+    public func removeAnnotation(_ id: UUID) {
+        do { try repository.removeAnnotation(id: id); loadAnnotations() }
+        catch { reportPersist(error) }
+    }
+
+    public func navigate(to item: DocumentAnnotation) {
+        guard let state = reference, state.documentID == item.documentID else {
+            lastError = .other("This annotation's document is unavailable."); return
+        }
+        annotationTarget = item
+        viewerMoved(pageIndex: item.pageIndex, visibleRect: item.rect)
+    }
+
     // MARK: - PDF import
 
     public func importPDF(from url: URL) {
@@ -629,6 +667,7 @@ public final class WorkspaceModel {
     private func loadReference() {
         guard let pieceID = selectedPieceID else {
             reference = nil
+            annotations = []
             return
         }
         do {
@@ -636,6 +675,7 @@ public final class WorkspaceModel {
         } catch {
             reference = nil
         }
+        loadAnnotations()
     }
 
     public func reload(keepReference: Bool = false) {

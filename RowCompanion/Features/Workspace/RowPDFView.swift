@@ -1,5 +1,6 @@
 import SwiftUI
 import PDFKit
+import UIKit
 
 /// SwiftUI wrapper around `PDFView` with the MVP security/privacy contract:
 /// - **No automatic external actions:** selection is disabled and this view
@@ -15,6 +16,13 @@ import PDFKit
 struct RowPDFView: UIViewRepresentable {
     let documentURL: URL
     let reference: ReferenceState
+    /// Report-only highlight anchors (issue #17). Drawn on the *in-memory*
+    /// document only; the app-owned PDF bytes are never rewritten, and the
+    /// source document's stored checksum therefore never changes.
+    var highlights: [DocumentAnnotation] = []
+    /// Explicit navigation target set from the annotation list; when it
+    /// changes the view scrolls there (button-driven, no required gesture).
+    var navigationTarget: DocumentAnnotation?
     /// Reports (0-based page, normalized visible rect) after user scrolling.
     let onMoved: (Int, NormalizedRect) -> Void
 
@@ -38,6 +46,7 @@ struct RowPDFView: UIViewRepresentable {
         context.coordinator.attachedURL = documentURL
         context.coordinator.observePageChanges(on: view)
         context.coordinator.scheduleRestore(of: reference)
+        context.coordinator.apply(highlights: highlights)
         return view
     }
 
@@ -49,6 +58,11 @@ struct RowPDFView: UIViewRepresentable {
             uiView.document = openDocument()
             context.coordinator.attachedURL = documentURL
             context.coordinator.scheduleRestore(of: reference)
+        }
+        context.coordinator.apply(highlights: highlights)
+        if let target = navigationTarget, context.coordinator.lastNavigationID != target.id {
+            context.coordinator.lastNavigationID = target.id
+            context.coordinator.navigate(to: target)
         }
     }
 
@@ -64,6 +78,9 @@ struct RowPDFView: UIViewRepresentable {
         let onMoved: (Int, NormalizedRect) -> Void
         weak var pdfView: PDFView?
         var attachedURL: URL?
+        var lastNavigationID: UUID?
+        private var drawnAnnotations: [PDFAnnotation] = []
+        private var drawnSignature = ""
         private var restorePending = false
         private var pendingState: ReferenceState?
         /// True while the page-changed observer is echoing our own restore.
@@ -129,6 +146,49 @@ struct RowPDFView: UIViewRepresentable {
                 let scale = Swift.max(1, Swift.min(view.bounds.width / Swift.max(target.width, 1), 4))
                 view.scaleFactor = scale
             }
+        }
+
+        /// Re-draw the report-only highlight overlay on the in-memory
+        /// document. Idempotent: only rebuilds when the anchor set changed.
+        /// Bookmarks/notes need no on-page art (they live in the list); only
+        /// `.highlight` draws. Nothing here is ever saved back to disk.
+        func apply(highlights: [DocumentAnnotation]) {
+            guard let document = pdfView?.document else { return }
+            let signature = highlights
+                .filter { $0.kind == .highlight }
+                .map { "\($0.id)\($0.pageIndex)\($0.rect.x),\($0.rect.y),\($0.rect.width),\($0.rect.height):\($0.title)" }
+                .joined(separator: "|")
+            guard signature != drawnSignature else { return }
+            drawnSignature = signature
+            for annotation in drawnAnnotations { annotation.page?.removeAnnotation(annotation) }
+            drawnAnnotations.removeAll()
+            for item in highlights where item.kind == .highlight {
+                guard let page = document.page(at: item.pageIndex) else { continue }
+                let pageSize = page.bounds(for: .mediaBox)
+                let rect = PDFCoordinateSpace.pageRect(for: item.rect, pageSize: pageSize.size)
+                guard rect.width > 0, rect.height > 0 else { continue }
+                let annotation = PDFAnnotation(bounds: rect, forType: .highlight, withProperties: nil)
+                annotation.color = UIColor.systemYellow.withAlphaComponent(0.4)
+                page.addAnnotation(annotation)
+                drawnAnnotations.append(annotation)
+            }
+        }
+
+        /// Scroll to an annotation from an explicit list tap. Then report the
+        /// new position so the piece's reference follows the jump.
+        func navigate(to item: DocumentAnnotation) {
+            guard let view = pdfView, let document = view.document,
+                  let page = document.page(at: ViewportClamp.clamp(pageIndex: item.pageIndex,
+                                                                   pageCount: document.pageCount)) else { return }
+            restoring = true
+            defer { restoring = false }
+            view.go(to: page)
+            let pageSize = page.bounds(for: .mediaBox)
+            guard pageSize.width > 0, pageSize.height > 0 else { return }
+            let target = PDFCoordinateSpace.pageRect(for: item.rect, pageSize: pageSize.size)
+            let scale = Swift.max(1, Swift.min(view.bounds.width / Swift.max(target.width, 1), 4))
+            view.scaleFactor = scale
+            view.go(to: PDFDestination(page: page, at: CGPoint(x: target.midX, y: target.midY)))
         }
 
         /// Echo the user's final scroll position upward (never while we are

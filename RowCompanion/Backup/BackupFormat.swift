@@ -83,7 +83,8 @@ public enum BackupFormat {
     /// Manifest schema version written into every snapshot.
     /// v2 adds `checkpoints` (issue #18). v3 adds `counters` and
     /// `counterEvents` (issue #16); older manifests decode as empty.
-    public static let schemaVersion = 3
+    /// v4 adds `annotations` (issue #17); older manifests decode as empty.
+    public static let schemaVersion = 4
     /// Restores refuse manifests stamped by a future schema (fail closed).
     public static let minimumSupportedVersion = 1
     /// Combined file-size cap for a staged restore (PLAN.md: 200 MiB).
@@ -177,6 +178,18 @@ public enum BackupFormat {
         public var createdAt: Date
     }
 
+    /// Issue #17: page/position-anchored bookmark, highlight or note. Like
+    /// references, anchored to the *document*, never stored into PDF bytes.
+    public struct AnnotationSnapshot: Codable, Equatable, Sendable {
+        public var id: UUID
+        public var documentID: UUID
+        public var kind: DocumentAnnotation.Kind
+        public var title: String
+        public var pageIndex: Int
+        public var rect: NormalizedRect
+        public var createdAt: Date
+    }
+
     /// The versioned manifest written at export time.
     public struct Manifest: Codable, Equatable, Sendable {
         public var schemaVersion: Int
@@ -190,10 +203,11 @@ public enum BackupFormat {
         public var checkpoints: [CheckpointSnapshot]
         public var counters: [CounterSnapshot]
         public var counterEvents: [CounterEventSnapshot]
+        public var annotations: [AnnotationSnapshot]
 
         enum CodingKeys: String, CodingKey {
             case schemaVersion, createdAt, includesOriginals, project, pieces, events, documents, references, checkpoints
-            case counters, counterEvents
+            case counters, counterEvents, annotations
         }
 
         public init(from decoder: Decoder) throws {
@@ -209,6 +223,7 @@ public enum BackupFormat {
             checkpoints = try container.decodeIfPresent([CheckpointSnapshot].self, forKey: .checkpoints) ?? []
             counters = try container.decodeIfPresent([CounterSnapshot].self, forKey: .counters) ?? []
             counterEvents = try container.decodeIfPresent([CounterEventSnapshot].self, forKey: .counterEvents) ?? []
+            annotations = try container.decodeIfPresent([AnnotationSnapshot].self, forKey: .annotations) ?? []
         }
 
         public init(
@@ -222,7 +237,8 @@ public enum BackupFormat {
             references: [ReferenceSnapshot],
             checkpoints: [CheckpointSnapshot] = [],
             counters: [CounterSnapshot] = [],
-            counterEvents: [CounterEventSnapshot] = []
+            counterEvents: [CounterEventSnapshot] = [],
+            annotations: [AnnotationSnapshot] = []
         ) {
             self.schemaVersion = schemaVersion
             self.createdAt = createdAt
@@ -235,6 +251,7 @@ public enum BackupFormat {
             self.checkpoints = checkpoints
             self.counters = counters
             self.counterEvents = counterEvents
+            self.annotations = annotations
         }
     }
 
@@ -351,6 +368,24 @@ public enum BackupFormat {
                 throw BackupError.invalidCountOrHistory(detail: "invalid checkpoint")
             }
             checkpointNames[checkpoint.pieceID, default: []].append(checkpoint.name.trimmingCharacters(in: .whitespacesAndNewlines))
+        }
+
+        // --- Annotations (issue #17) ----------------------------------------
+        var seenAnnotationIDs: Set<UUID> = []
+        let pageCounts = Dictionary(uniqueKeysWithValues: manifest.documents.map { ($0.id, $0.pageCount) })
+        for annotation in manifest.annotations {
+            guard seenAnnotationIDs.insert(annotation.id).inserted else {
+                throw BackupError.duplicateID(kind: "annotation", id: annotation.id.uuidString)
+            }
+            guard let pageCount = pageCounts[annotation.documentID] else {
+                throw BackupError.danglingReference(kind: "document", id: annotation.documentID.uuidString)
+            }
+            let record = DocumentAnnotation(id: annotation.id, documentID: annotation.documentID,
+                kind: annotation.kind, title: annotation.title, pageIndex: annotation.pageIndex,
+                rect: annotation.rect, createdAt: annotation.createdAt)
+            guard AnnotationRules.valid(record, pageCount: pageCount) else {
+                throw BackupError.invalidCountOrHistory(detail: "invalid annotation")
+            }
         }
 
         // --- Named counters (issue #16) -------------------------------------
@@ -654,6 +689,12 @@ public enum BackupFormat {
                 createdAt: event.createdAt
             )
         }
+        let annotations = manifest.annotations.map { annotation in
+            AnnotationSnapshot(id: mapped(annotation.id), documentID: mapped(annotation.documentID),
+                               kind: annotation.kind, title: annotation.title,
+                               pageIndex: annotation.pageIndex, rect: annotation.rect,
+                               createdAt: annotation.createdAt)
+        }
         let bytes = Dictionary(uniqueKeysWithValues: validated.documentBytes.map { (mapped($0.key), $0.value) })
         return ProjectSnapshotBundle(
             manifest: Manifest(
@@ -667,7 +708,8 @@ public enum BackupFormat {
                 references: references,
                 checkpoints: checkpoints,
                 counters: counters,
-                counterEvents: counterEvents
+                counterEvents: counterEvents,
+                annotations: annotations
             ),
             documentBytes: bytes
         )

@@ -110,7 +110,7 @@ final class CheckpointPersistenceTests: XCTestCase {
         let data = try BackupService(repository: repo).exportProgress(for: project.id)
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
-        XCTAssertEqual(try decoder.decode(BackupFormat.Manifest.self, from: data).schemaVersion, 3)
+        XCTAssertEqual(try decoder.decode(BackupFormat.Manifest.self, from: data).schemaVersion, 4)
         var legacy = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
         legacy.removeValue(forKey: "checkpoints")
         legacy["schemaVersion"] = 1

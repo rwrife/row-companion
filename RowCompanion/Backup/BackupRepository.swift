@@ -89,6 +89,13 @@ extension RowRepository {
             }
         }
         let documents = try self.documents(in: projectID)
+        let annotations = try documents.flatMap { doc in
+            try self.annotations(for: doc.id).map { item in
+                BackupFormat.AnnotationSnapshot(id: item.id, documentID: item.documentID,
+                    kind: item.kind, title: item.title, pageIndex: item.pageIndex,
+                    rect: item.rect, createdAt: item.createdAt)
+            }
+        }
         let documentSnapshots: [BackupFormat.DocumentSnapshot] = documents.map { doc in
             // The recorded size is the size of the app-owned copy at export
             // time; a vanished file records 0 and therefore fails validation
@@ -121,7 +128,8 @@ extension RowRepository {
             references: references,
             checkpoints: checkpoints,
             counters: counters,
-            counterEvents: counterEvents
+            counterEvents: counterEvents,
+            annotations: annotations
         )
     }
 
@@ -201,6 +209,12 @@ extension RowRepository {
                 createdAt: event.createdAt
             )))
         }
+        for item in manifest.annotations {
+            context.insert(StoredDocumentAnnotation(DocumentAnnotation(
+                id: item.id, documentID: item.documentID, kind: item.kind,
+                title: item.title, pageIndex: item.pageIndex,
+                rect: item.rect, createdAt: item.createdAt)))
+        }
         do {
             try commit()
         } catch {
@@ -255,6 +269,7 @@ extension RowRepository {
 
         let reminders = try storedReminders(pieceIDs: pieceIDs)
         let checkpoints = try storedCheckpoints(pieceIDs: pieceIDs)
+        let annotations = try storedAnnotations(documentIDs: Set(documents.map(\.id)))
         let counters = try context.fetch(FetchDescriptor<StoredNamedCounter>(predicate: #Predicate { pieceIDs.contains($0.pieceID) }))
         let counterIDs = Set(counters.map(\.id))
         let counterEvents = try context.fetch(FetchDescriptor<StoredCounterEvent>(predicate: #Predicate { counterIDs.contains($0.counterID) }))
@@ -265,6 +280,7 @@ extension RowRepository {
         for object in reminders { context.delete(object) }
         for object in checkpoints { context.delete(object) }
         for object in counterEvents { context.delete(object) }
+        for object in annotations { context.delete(object) }
         for object in counters { context.delete(object) }
         for object in documents { context.delete(object) }
         for object in pieces { context.delete(object) }
