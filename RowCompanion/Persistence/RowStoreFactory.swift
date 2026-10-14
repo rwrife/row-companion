@@ -22,16 +22,18 @@ public enum RowStoreFactory {
     /// v4 adds `StoredShapingReminder` (issue #15).
     /// v5 adds `StoredProgressCheckpoint` (issue #18).
     /// v6 adds `StoredLibraryEntry` (issue #14) without changing legacy entities.
-    /// v7 adds `StoredWorkspaceSession` (issue #13) after the shipped v6 store.
+    /// v7 adds named counters and counter events without changing legacy entities.
+    /// v8 adds `StoredWorkspaceSession` (issue #13) after the shipped v7 store.
     /// SwiftData performs additive lightweight migration; missing entries read
     /// as active, with last-worked derived from existing row events.
-    public static let schemaVersion = 7
+    public static let schemaVersion = 8
 
     public static var schema: Schema {
         Schema([StoredProject.self, StoredPiece.self, StoredRowEvent.self, StoredStoreInfo.self,
                 StoredPatternDocument.self, StoredReferenceState.self,
-                StoredWorkspaceSession.self, StoredShapingReminder.self,
-                StoredProgressCheckpoint.self, StoredLibraryEntry.self])
+                StoredShapingReminder.self, StoredProgressCheckpoint.self, StoredLibraryEntry.self,
+                StoredNamedCounter.self, StoredCounterEvent.self,
+                StoredWorkspaceSession.self])
     }
 
     /// Local, non-mirrored configuration for the given store URL.

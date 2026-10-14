@@ -18,6 +18,10 @@ public enum RowRepositoryError: Error, Equatable {
     /// A progress checkpoint as authored failed validation (issue #18).
     case checkpointInvalid(String)
     case checkpointNotFound(UUID)
+    /// A named counter as authored failed validation, or a linked action
+    /// would leave a member counter divergent (issue #16).
+    case counterInvalid
+    case counterNotFound(UUID)
 }
 
 /// Local-first, transactional row repository.
@@ -299,6 +303,17 @@ public final class RowRepository {
         }
         guard let event = transition.event else { return nil }
 
+        // Issue #16: linked named counters advance/undo in this same commit.
+        // Computed *before* any mutation so an inconsistent member aborts
+        // the whole action with nothing durable.
+        let counterChanges: [(StoredNamedCounter, CounterEvent)]
+        switch action {
+        case .completeRow, .undo:
+            counterChanges = try self.counterChanges(for: pieceID, rowEvent: event, undo: action == .undo)
+        case .correction, .setRepeatLength:
+            counterChanges = []
+        }
+
         do {
             stored.completedRows = transition.piece.completedRows
             stored.repeatLength = transition.piece.repeatLength
@@ -312,6 +327,10 @@ public final class RowRepository {
                 createdAt: event.createdAt,
                 undoneEventID: event.undoneEventID
             ))
+            for (counter, cEvent) in counterChanges {
+                counter.value = cEvent.after
+                context.insert(StoredCounterEvent(cEvent))
+            }
             if event.kind != .repeatLengthChange {
                 let entry = try libraryEntry(piece.projectID)
                 entry.lastWorkedAt = event.createdAt
@@ -494,13 +513,34 @@ extension RowRepository {
                     context.insert(StoredShapingReminder(id: UUID(), pieceID: pieceID, instruction: reminder.instruction,
                         intervalRaw: reminder.interval, startRow: reminder.startRow, endRow: reminder.endRow, createdAt: now))
                 }
+                // Issue #16: counter definitions are setup data like reminders.
+                // Current values plus history only move with copyProgress.
+                let rowEvents = copyProgress ? try history(for: piece.id) : []
+                let rowEventIDs = Dictionary(uniqueKeysWithValues: rowEvents.map { ($0.id, UUID()) })
+                for counter in try counters(for: piece.id) {
+                    let counterID = UUID()
+                    context.insert(StoredNamedCounter(id: counterID, pieceID: pieceID, name: counter.name,
+                        unit: counter.unit, startingValue: counter.startingValue,
+                        value: copyProgress ? counter.value : counter.startingValue,
+                        repeatLength: counter.repeatLength, advancesWithRows: counter.advancesWithRows))
+                    if copyProgress {
+                        let events = try counterHistory(for: counter.id)
+                        let eventIDs = Dictionary(uniqueKeysWithValues: events.map { ($0.id, UUID()) })
+                        for event in events {
+                            context.insert(StoredCounterEvent(CounterEvent(
+                                id: eventIDs[event.id]!, counterID: counterID, sequence: event.sequence,
+                                kind: event.kind, before: event.before, after: event.after,
+                                rowEventID: event.rowEventID.flatMap { rowEventIDs[$0] },
+                                undoneEventID: event.undoneEventID.flatMap { eventIDs[$0] },
+                                createdAt: event.createdAt)))
+                        }
+                    }
+                }
                 if copyProgress {
-                    let events = try history(for: piece.id)
-                    let eventIDs = Dictionary(uniqueKeysWithValues: events.map { ($0.id, UUID()) })
-                    for event in events {
-                        context.insert(StoredRowEvent(id: eventIDs[event.id]!, pieceID: pieceID, sequence: event.sequence,
+                    for event in rowEvents {
+                        context.insert(StoredRowEvent(id: rowEventIDs[event.id]!, pieceID: pieceID, sequence: event.sequence,
                             kind: event.kind, before: event.before, after: event.after, createdAt: event.createdAt,
-                            undoneEventID: event.undoneEventID.flatMap { eventIDs[$0] }))
+                            undoneEventID: event.undoneEventID.flatMap { rowEventIDs[$0] }))
                     }
                     for checkpoint in try checkpoints(for: piece.id) {
                         context.insert(StoredProgressCheckpoint(id: UUID(), pieceID: pieceID, name: checkpoint.name,

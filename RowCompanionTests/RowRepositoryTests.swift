@@ -349,14 +349,15 @@ final class ProjectLibraryTests: XCTestCase {
             let projectID = UUID(), pieceID = UUID(), eventID = UUID()
             let date = Date(timeIntervalSince1970: 1000)
             do {
-                // Shipped v6 schema, genuinely without the new session entity.
+                // Shipped v7 schema (library + counters), genuinely without the new session entity.
                 let oldSchema = Schema([StoredProject.self, StoredPiece.self, StoredRowEvent.self,
                     StoredStoreInfo.self, StoredPatternDocument.self, StoredReferenceState.self,
-                    StoredShapingReminder.self, StoredProgressCheckpoint.self, StoredLibraryEntry.self])
+                    StoredShapingReminder.self, StoredProgressCheckpoint.self, StoredLibraryEntry.self,
+                    StoredNamedCounter.self, StoredCounterEvent.self])
                 let config = ModelConfiguration("RowCompanion", schema: oldSchema, url: url, cloudKitDatabase: .none)
                 let container = try ModelContainer(for: oldSchema, configurations: [config])
                 let context = ModelContext(container)
-                context.insert(StoredStoreInfo(schemaVersion: 6, createdAt: date))
+                context.insert(StoredStoreInfo(schemaVersion: 7, createdAt: date))
                 context.insert(StoredProject(id: projectID, title: "Library fixture", createdAt: date, updatedAt: date))
                 context.insert(StoredPiece(id: pieceID, projectID: projectID, name: "Sleeve", completedRows: 1, repeatLength: 8, notes: "Preserved note"))
                 context.insert(StoredRowEvent(id: eventID, pieceID: pieceID, sequence: 1,
@@ -380,7 +381,7 @@ final class ProjectLibraryTests: XCTestCase {
             let summary = try XCTUnwrap(reopened.librarySummaries().first)
             XCTAssertEqual(summary.status, .archived)
             XCTAssertEqual(summary.lastWorkedAt, date)
-            XCTAssertEqual(try ModelContext(reopened.container).fetch(FetchDescriptor<StoredStoreInfo>()).first?.schemaVersion, 7)
+            XCTAssertEqual(try ModelContext(reopened.container).fetch(FetchDescriptor<StoredStoreInfo>()).first?.schemaVersion, 8)
         }
     }
 
