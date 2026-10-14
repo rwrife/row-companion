@@ -114,6 +114,27 @@ public enum RowAction: Equatable, Sendable {
     case setRepeatLength(Int?)
 }
 
+/// Plain value record for the durable app session (issue #13): which project
+/// and piece the user was last working in, and the control-pane scroll offset.
+/// Like every other domain record this is a plain value with no UI or
+/// persistence imports. It carries **no** row counts — resume state lives
+/// entirely beside, never inside, piece progress.
+public struct WorkspaceSessionRecord: Equatable, Sendable {
+    /// The singleton key the active session row is stored under.
+    public static let activeKey = "active"
+
+    public var selectedProjectID: UUID?
+    public var selectedPieceID: UUID?
+    /// Offset (points, ≥ 0) of the control pane's scroll position.
+    public var controlScrollOffset: Double
+
+    public init(selectedProjectID: UUID? = nil, selectedPieceID: UUID? = nil, controlScrollOffset: Double = 0) {
+        self.selectedProjectID = selectedProjectID
+        self.selectedPieceID = selectedPieceID
+        self.controlScrollOffset = controlScrollOffset
+    }
+}
+
 public enum ProjectStatus: String, CaseIterable, Hashable, Sendable {
     case active, archived, completed
     public var label: String { rawValue.capitalized }

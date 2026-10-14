@@ -8,6 +8,7 @@ import UniformTypeIdentifiers
 /// never touches counts or viewport.
 struct ContentView: View {
     @Environment(WorkspaceModel.self) private var model
+    @Environment(\.scenePhase) private var scenePhase
     @State private var showLibrary = false
     @State private var showNewProject = false
     @State private var showNewPiece = false
@@ -97,6 +98,11 @@ struct ContentView: View {
             }
         } message: {
             Text("The project, its pieces, history, and the pattern copies the app made for it are removed. \(model.deletionScopeNote)")
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase != .active {
+                model.captureCurrentWorkspace()
+            }
         }
     }
 

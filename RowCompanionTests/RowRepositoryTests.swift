@@ -74,6 +74,100 @@ final class RowRepositoryTests: XCTestCase {
         XCTAssertEqual(try relaunched.history(for: piece.id).count, 1)
     }
 
+    func testWorkspaceSessionRoundTripsAcrossRelaunch() throws {
+        let repo = try RowRepository(storeURL: storeURL)
+        let project = try repo.createProject(title: "Cardigan")
+        let piece = try repo.addPiece(to: project.id, name: "Sleeve")
+        try repo.apply(.completeRow, to: piece.id)
+        let session = WorkspaceSessionRecord(
+            selectedProjectID: project.id,
+            selectedPieceID: piece.id,
+            controlScrollOffset: 184.5
+        )
+        try repo.saveWorkspaceSession(session)
+
+        let relaunched = try RowRepository.open(storeURL: storeURL)
+        XCTAssertEqual(try relaunched.workspaceSession(), session)
+        XCTAssertEqual(try relaunched.piece(piece.id).completedRows, 1)
+    }
+
+    func testWorkspaceSessionRejectsPieceFromAnotherProject() throws {
+        let repo = try RowRepository(storeURL: storeURL)
+        let first = try repo.createProject(title: "First")
+        let second = try repo.createProject(title: "Second")
+        let foreignPiece = try repo.addPiece(to: second.id, name: "Foreign")
+
+        XCTAssertThrowsError(try repo.saveWorkspaceSession(WorkspaceSessionRecord(
+            selectedProjectID: first.id,
+            selectedPieceID: foreignPiece.id,
+            controlScrollOffset: 12
+        ))) { error in
+            XCTAssertEqual(error as? RowRepositoryError, .pieceNotFound(foreignPiece.id))
+        }
+        XCTAssertNil(try repo.workspaceSession())
+    }
+
+    func testWorkspaceSessionFailedSavePreservesPriorValue() throws {
+        let repo = try RowRepository(storeURL: storeURL)
+        let project = try repo.createProject(title: "Scarf")
+        let piece = try repo.addPiece(to: project.id, name: "Front")
+        let baseline = WorkspaceSessionRecord(
+            selectedProjectID: project.id,
+            selectedPieceID: piece.id,
+            controlScrollOffset: 40
+        )
+        try repo.saveWorkspaceSession(baseline)
+
+        struct Injected: Error {}
+        repo.testSaveFault = { throw Injected() }
+        XCTAssertThrowsError(try repo.saveWorkspaceSession(WorkspaceSessionRecord(
+            selectedProjectID: project.id,
+            selectedPieceID: piece.id,
+            controlScrollOffset: 300
+        )))
+        repo.testSaveFault = nil
+
+        XCTAssertEqual(try repo.workspaceSession(), baseline)
+        let relaunched = try RowRepository.open(storeURL: storeURL)
+        XCTAssertEqual(try relaunched.workspaceSession(), baseline)
+    }
+
+    func testVersionTwoStoreMigratesAndRestamps() throws {
+        let oldSchema = Schema([
+            StoredProject.self, StoredPiece.self, StoredRowEvent.self,
+            StoredStoreInfo.self, StoredPatternDocument.self,
+            StoredReferenceState.self,
+        ])
+        let oldConfiguration = ModelConfiguration(
+            "RowCompanion",
+            schema: oldSchema,
+            url: storeURL,
+            cloudKitDatabase: .none
+        )
+        do {
+            let oldContainer = try ModelContainer(
+                for: oldSchema,
+                configurations: [oldConfiguration]
+            )
+            let oldContext = ModelContext(oldContainer)
+            let now = Date()
+            oldContext.insert(StoredStoreInfo(schemaVersion: 2, createdAt: now))
+            oldContext.insert(StoredProject(
+                id: UUID(), title: "Migrated", createdAt: now, updatedAt: now
+            ))
+            try oldContext.save()
+        }
+
+        let migrated = try RowRepository.open(storeURL: storeURL)
+        XCTAssertEqual(try migrated.projects().map(\.title), ["Migrated"])
+        XCTAssertNil(try migrated.workspaceSession())
+        let descriptor = FetchDescriptor<StoredStoreInfo>()
+        XCTAssertEqual(
+            try ModelContext(migrated.container).fetch(descriptor).first?.schemaVersion,
+            RowStoreFactory.schemaVersion
+        )
+    }
+
     /// Event + count commit atomically in both directions: after a successful
     /// complete the durable pair is consistent (event.after == count).
     func testEventAndCountCommitAtomically() throws {
@@ -250,6 +344,47 @@ final class ProjectLibraryTests: XCTestCase {
         }
     }
 
+    func testShippedLibraryStoreMigratesAndResumesWithoutLosingProgress() throws {
+        try withStore { url in
+            let projectID = UUID(), pieceID = UUID(), eventID = UUID()
+            let date = Date(timeIntervalSince1970: 1000)
+            do {
+                // Shipped v7 schema (library + counters), genuinely without the new session entity.
+                let oldSchema = Schema([StoredProject.self, StoredPiece.self, StoredRowEvent.self,
+                    StoredStoreInfo.self, StoredPatternDocument.self, StoredReferenceState.self,
+                    StoredShapingReminder.self, StoredProgressCheckpoint.self, StoredLibraryEntry.self,
+                    StoredNamedCounter.self, StoredCounterEvent.self])
+                let config = ModelConfiguration("RowCompanion", schema: oldSchema, url: url, cloudKitDatabase: .none)
+                let container = try ModelContainer(for: oldSchema, configurations: [config])
+                let context = ModelContext(container)
+                context.insert(StoredStoreInfo(schemaVersion: 7, createdAt: date))
+                context.insert(StoredProject(id: projectID, title: "Library fixture", createdAt: date, updatedAt: date))
+                context.insert(StoredPiece(id: pieceID, projectID: projectID, name: "Sleeve", completedRows: 1, repeatLength: 8, notes: "Preserved note"))
+                context.insert(StoredRowEvent(id: eventID, pieceID: pieceID, sequence: 1,
+                    kind: .completeRow, before: 0, after: 1, createdAt: date, undoneEventID: nil))
+                context.insert(StoredLibraryEntry(projectID: projectID, statusRaw: "archived", lastWorkedAt: date))
+                try context.save()
+            }
+            let migrated = try RowRepository.open(storeURL: url)
+            XCTAssertNil(try migrated.workspaceSession())
+            let model = WorkspaceModel(repository: migrated)
+            XCTAssertEqual(model.selectedProjectID, projectID)
+            XCTAssertEqual(model.selectedPieceID, pieceID)
+            model.setControlScrollOffset(150)
+            let reopened = try RowRepository.open(storeURL: url)
+            let resumed = WorkspaceModel(repository: reopened)
+            XCTAssertEqual(resumed.selectedPieceID, pieceID)
+            XCTAssertEqual(resumed.controlScrollOffset, 150)
+            XCTAssertEqual(try reopened.piece(pieceID).completedRows, 1)
+            XCTAssertEqual(try reopened.piece(pieceID).notes, "Preserved note")
+            XCTAssertEqual(try reopened.history(for: pieceID).first?.id, eventID)
+            let summary = try XCTUnwrap(reopened.librarySummaries().first)
+            XCTAssertEqual(summary.status, .archived)
+            XCTAssertEqual(summary.lastWorkedAt, date)
+            XCTAssertEqual(try ModelContext(reopened.container).fetch(FetchDescriptor<StoredStoreInfo>()).first?.schemaVersion, 8)
+        }
+    }
+
     func testActualPreLibrarySchemaMigratesWithoutLosingHistory() throws {
         try withStore { url in
             let id = UUID(), pieceID = UUID(), eventID = UUID()
@@ -280,7 +415,7 @@ final class ProjectLibraryTests: XCTestCase {
             let reopened = try RowRepository.open(storeURL: url)
             XCTAssertEqual(try reopened.librarySummaries().first?.status, .archived)
             let context = ModelContext(reopened.container)
-            XCTAssertEqual(try context.fetch(FetchDescriptor<StoredStoreInfo>()).first?.schemaVersion, 7)
+            XCTAssertEqual(try context.fetch(FetchDescriptor<StoredStoreInfo>()).first?.schemaVersion, RowStoreFactory.schemaVersion)
             try reopened.deleteProject(id, confirmed: true)
             XCTAssertTrue(try context.fetch(FetchDescriptor<StoredLibraryEntry>()).isEmpty)
         }

@@ -72,8 +72,8 @@ class ReminderContractTests(unittest.TestCase):
     def test_reminders_migrate_with_store_version(self):
         factory = (APP / 'Persistence' / 'RowStoreFactory.swift').read_text()
         self.assertIn('StoredShapingReminder.self', factory)
-        # v3 is reserved for the session model (issue #13); #15 lands at 4; #18 at 5.
-        self.assertTrue(re.search(r'schemaVersion\s*=\s*[4-7]\b', factory), factory)
+        # #15 lands at v4; current store retains reminders alongside counters and sessions.
+        self.assertTrue(re.search(r'schemaVersion\s*=\s*[4-8]\b', factory), factory)
 
     def test_ui_journey_targets_reminder_controls(self):
         layout = (APP / 'Features' / 'Workspace' / 'WorkspaceLayout.swift').read_text()

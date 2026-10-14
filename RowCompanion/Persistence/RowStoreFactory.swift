@@ -19,21 +19,21 @@ public enum RowStoreFactory {
 
     /// Current on-disk schema version stamped into every fresh store.
     /// v2 adds `StoredPatternDocument` + `StoredReferenceState` (issue #3).
-    /// v4 adds `StoredShapingReminder` (issue #15). v3 is reserved for the
-    /// in-flight workspace-session model (issue #13); gaps are safe because
-    /// the reader gate only rejects *newer-than-known* stamps.
+    /// v4 adds `StoredShapingReminder` (issue #15).
     /// v5 adds `StoredProgressCheckpoint` (issue #18).
     /// v6 adds `StoredLibraryEntry` (issue #14) without changing legacy entities.
+    /// v7 adds named counters and counter events without changing legacy entities.
+    /// v8 adds `StoredWorkspaceSession` (issue #13) after the shipped v7 store.
     /// SwiftData performs additive lightweight migration; missing entries read
     /// as active, with last-worked derived from existing row events.
-    /// v7 adds named counters and counter events without changing legacy entities.
-    public static let schemaVersion = 7
+    public static let schemaVersion = 8
 
     public static var schema: Schema {
         Schema([StoredProject.self, StoredPiece.self, StoredRowEvent.self, StoredStoreInfo.self,
                 StoredPatternDocument.self, StoredReferenceState.self,
                 StoredShapingReminder.self, StoredProgressCheckpoint.self, StoredLibraryEntry.self,
-                StoredNamedCounter.self, StoredCounterEvent.self])
+                StoredNamedCounter.self, StoredCounterEvent.self,
+                StoredWorkspaceSession.self])
     }
 
     /// Local, non-mirrored configuration for the given store URL.
@@ -64,6 +64,11 @@ public enum RowStoreFactory {
             guard info.schemaVersion <= schemaVersion else {
                 throw RowRepositoryError.unsupportedSchemaVersion(found: info.schemaVersion)
             }
+            // The ModelContainer above has already run the additive SwiftData
+            // migration (a v2 store gains the optional session table here).
+            // Restamp only after that succeeded, so an interrupted migration
+            // can never claim completion; a crash before this save just re-runs
+            // the same idempotent additive step on the next open.
             if info.schemaVersion < schemaVersion {
                 info.schemaVersion = schemaVersion
                 try context.save()
