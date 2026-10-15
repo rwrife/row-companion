@@ -168,6 +168,7 @@ private struct ControlPane: View {
     @State private var showCounterComposer = false
     @State private var counterToCorrect: NamedCounter?
     @State private var counterCorrectionText = ""
+    @State private var showDetailsEditor = false
 
     var body: some View {
         ScrollView {
@@ -186,6 +187,7 @@ private struct ControlPane: View {
                             .accessibilityIdentifier("reminder.dueBanner")
                     }
                     repeatPicker(piece: piece)
+                    detailsSection()
                     countersSection()
                     if model.referenceDocumentURL != nil {
                         guideSlider
@@ -300,6 +302,25 @@ private struct ControlPane: View {
             } message: {
                 Text("Replace the completed-row count? This records a correction in the piece history; Cancel keeps the current count.")
             }
+        }
+    }
+
+    /// Structured project/piece details (issue #20). Read summary plus an
+    /// editor sheet; stored numbers are canonical metric, the display-unit
+    /// toggle only converts presentation.
+    private func detailsSection() -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Project details")
+                .font(.headline)
+            Text(model.effectiveDetails.summaryText(isImperial: model.usesImperialDisplay))
+                .font(.callout)
+                .accessibilityIdentifier("details.summary")
+            Button("Edit details…") { showDetailsEditor = true }
+                .frame(minHeight: 44)
+                .accessibilityIdentifier("button.editDetails")
+        }
+        .sheet(isPresented: $showDetailsEditor) {
+            DetailsEditor(isPresented: $showDetailsEditor)
         }
     }
 
@@ -671,5 +692,108 @@ private struct ProgressReadout: View {
                     .accessibilityIdentifier("row.next")
             }
         }
+    }
+}
+
+// MARK: - Details editor (issue #20)
+
+/// Edits project defaults and the selected piece's overrides. All fields are
+/// optional; entries are parsed in the chosen display unit and saved as
+/// canonical metric. Unparseable numbers block Save and are never coerced.
+private struct DetailsEditor: View {
+    @Environment(WorkspaceModel.self) private var model
+    @Binding var isPresented: Bool
+    @State private var scopeIsPiece = false
+    @State private var imperial = false
+    @State private var material = ""
+    @State private var colorway = ""
+    @State private var size = ""
+    @State private var tool = ""
+    @State private var stitches = ""
+    @State private var rows = ""
+    @State private var measurement = ""
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Picker("Applies to", selection: $scopeIsPiece) {
+                    Text("Whole project").tag(false)
+                    Text("This piece only").tag(true)
+                }
+                .pickerStyle(.segmented)
+                .accessibilityIdentifier("details.scope")
+                .onChange(of: scopeIsPiece) { _, _ in load() }
+                Toggle("Show imperial units", isOn: $imperial)
+                    .accessibilityIdentifier("details.imperial")
+                    .onChange(of: imperial) { _, _ in
+                        // Presentation only: stored metric values are reloaded and re-rendered.
+                        model.setImperialDisplay(imperial)
+                        load()
+                    }
+                if scopeIsPiece {
+                    Text("Blank fields use the project value.")
+                        .font(.footnote)
+                }
+                TextField("Yarn or material", text: $material).accessibilityIdentifier("details.material")
+                TextField("Colorway", text: $colorway).accessibilityIdentifier("details.colorway")
+                TextField("Selected size", text: $size).accessibilityIdentifier("details.size")
+                TextField(imperial ? "Needle or hook size (in)" : "Needle or hook size (mm)", text: $tool)
+                    .keyboardType(.decimalPad).accessibilityIdentifier("details.tool")
+                TextField(imperial ? "Stitches per 4 in" : "Stitches per 10 cm", text: $stitches)
+                    .keyboardType(.decimalPad).accessibilityIdentifier("details.stitches")
+                TextField(imperial ? "Rows per 4 in" : "Rows per 10 cm", text: $rows)
+                    .keyboardType(.decimalPad).accessibilityIdentifier("details.rows")
+                TextField(imperial ? "Measurement (in)" : "Measurement (mm)", text: $measurement)
+                    .keyboardType(.decimalPad).accessibilityIdentifier("details.measurement")
+            }
+            .navigationTitle("Project details")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { isPresented = false } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") { save() }
+                        .disabled(draft() == nil)
+                        .accessibilityIdentifier("details.save")
+                }
+            }
+            .onAppear { imperial = model.usesImperialDisplay; load() }
+        }
+    }
+
+    private func load() {
+        let details = scopeIsPiece ? model.pieceDetails : model.projectDetails
+        material = details.material; colorway = details.colorway; size = details.selectedSize
+        tool = text(details.toolSizeMM.map { imperial ? ProjectDetails.inches(fromMM: $0) : $0 })
+        stitches = text(details.gaugeStitchesPer10CM.map { imperial ? ProjectDetails.countPer4Inches(fromPer10CM: $0) : $0 })
+        rows = text(details.gaugeRowsPer10CM.map { imperial ? ProjectDetails.countPer4Inches(fromPer10CM: $0) : $0 })
+        measurement = text(details.measurementMM.map { imperial ? ProjectDetails.inches(fromMM: $0) : $0 })
+    }
+
+    private func text(_ value: Double?) -> String { value.map { String($0) } ?? "" }
+
+    /// nil when any non-blank number fails to parse.
+    private func parse(_ string: String) -> Double?? {
+        let trimmed = string.trimmingCharacters(in: .whitespaces)
+        if trimmed.isEmpty { return .some(nil) }
+        guard let value = Double(trimmed) else { return nil }
+        return .some(value)
+    }
+
+    private func draft() -> ProjectDetails? {
+        guard let t = parse(tool), let s = parse(stitches), let r = parse(rows), let m = parse(measurement) else { return nil }
+        let details = ProjectDetails(
+            material: material.trimmingCharacters(in: .whitespacesAndNewlines),
+            colorway: colorway.trimmingCharacters(in: .whitespacesAndNewlines),
+            selectedSize: size.trimmingCharacters(in: .whitespacesAndNewlines),
+            toolSizeMM: t.map { imperial ? ProjectDetails.mm(fromInches: $0) : $0 },
+            gaugeStitchesPer10CM: s.map { imperial ? ProjectDetails.countPer10CM(fromPer4Inches: $0) : $0 },
+            gaugeRowsPer10CM: r.map { imperial ? ProjectDetails.countPer10CM(fromPer4Inches: $0) : $0 },
+            measurementMM: m.map { imperial ? ProjectDetails.mm(fromInches: $0) : $0 })
+        return details.isValid ? details : nil
+    }
+
+    private func save() {
+        guard let details = draft() else { return }
+        if scopeIsPiece { model.savePieceDetails(details) } else { model.saveProjectDetails(details) }
+        isPresented = false
     }
 }

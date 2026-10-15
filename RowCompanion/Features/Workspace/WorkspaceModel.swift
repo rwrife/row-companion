@@ -80,6 +80,14 @@ public final class WorkspaceModel {
     public private(set) var rowHistory: [RowEvent] = []
     /// Named counters for the selected piece (issue #16), name-ordered.
     public private(set) var counters: [NamedCounter] = []
+    /// Structured details for the selected project (issue #20) and the raw
+    /// piece-override set for the selected piece.
+    public private(set) var projectDetails = ProjectDetails()
+    public private(set) var pieceDetails = ProjectDetails()
+    /// Local display preference; no conversion or rewrite of stored values.
+    public var usesImperialDisplay = false
+
+    public func setImperialDisplay(_ enabled: Bool) { usesImperialDisplay = enabled }
 
     /// Counters that will advance/undo together with the completed-row counter.
     /// Shown next to the row controls so the affected group is explicit.
@@ -123,6 +131,7 @@ public final class WorkspaceModel {
         loadCheckpoints()
         loadCounters()
         loadRowHistory()
+        loadDetails()
         refreshStatus()
     }
 
@@ -385,6 +394,32 @@ public final class WorkspaceModel {
             try repository.removeCounter(id: id)
             loadCounters()
         } catch { reportPersist(error) }
+    }
+
+    // MARK: - Structured details (issue #20)
+
+    private func loadDetails() {
+        projectDetails = selectedProjectID.flatMap { try? repository.details(forProject: $0) } ?? ProjectDetails()
+        pieceDetails = selectedPieceID.flatMap { try? repository.details(forPiece: $0) } ?? ProjectDetails()
+    }
+
+    /// Project defaults with the selected piece's overrides applied.
+    public var effectiveDetails: ProjectDetails { pieceDetails.overriding(projectDetails) }
+
+    public func saveProjectDetails(_ details: ProjectDetails) {
+        guard let projectID = selectedProjectID else { lastError = .noProjectSelected; return }
+        do {
+            try repository.setDetails(details, forProject: projectID)
+            loadDetails()
+        } catch { reportPersist(error); loadDetails() }
+    }
+
+    public func savePieceDetails(_ details: ProjectDetails) {
+        guard let pieceID = selectedPieceID else { lastError = .noPieceSelected; return }
+        do {
+            try repository.setDetails(details, forPiece: pieceID)
+            loadDetails()
+        } catch { reportPersist(error); loadDetails() }
     }
 
     // MARK: - PDF import
@@ -655,6 +690,7 @@ public final class WorkspaceModel {
         if keepReference { reference = previousReference }
         loadRowHistory()
         loadCounters()
+        loadDetails()
     }
 
     private func refreshStatus() {

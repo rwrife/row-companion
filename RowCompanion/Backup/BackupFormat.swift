@@ -83,7 +83,9 @@ public enum BackupFormat {
     /// Manifest schema version written into every snapshot.
     /// v2 adds `checkpoints` (issue #18). v3 adds `counters` and
     /// `counterEvents` (issue #16); older manifests decode as empty.
-    public static let schemaVersion = 3
+    /// v4 is reserved for the in-flight annotations branch; v5 adds
+    /// `details` (issue #20); older manifests decode as empty.
+    public static let schemaVersion = 5
     /// Restores refuse manifests stamped by a future schema (fail closed).
     public static let minimumSupportedVersion = 1
     /// Combined file-size cap for a staged restore (PLAN.md: 200 MiB).
@@ -177,6 +179,12 @@ public enum BackupFormat {
         public var createdAt: Date
     }
 
+    public struct DetailsSnapshot: Codable, Equatable, Sendable {
+        public var ownerID: UUID
+        public var isPieceOverride: Bool
+        public var value: ProjectDetails
+    }
+
     /// The versioned manifest written at export time.
     public struct Manifest: Codable, Equatable, Sendable {
         public var schemaVersion: Int
@@ -190,10 +198,11 @@ public enum BackupFormat {
         public var checkpoints: [CheckpointSnapshot]
         public var counters: [CounterSnapshot]
         public var counterEvents: [CounterEventSnapshot]
+        public var details: [DetailsSnapshot]
 
         enum CodingKeys: String, CodingKey {
             case schemaVersion, createdAt, includesOriginals, project, pieces, events, documents, references, checkpoints
-            case counters, counterEvents
+            case counters, counterEvents, details
         }
 
         public init(from decoder: Decoder) throws {
@@ -209,6 +218,7 @@ public enum BackupFormat {
             checkpoints = try container.decodeIfPresent([CheckpointSnapshot].self, forKey: .checkpoints) ?? []
             counters = try container.decodeIfPresent([CounterSnapshot].self, forKey: .counters) ?? []
             counterEvents = try container.decodeIfPresent([CounterEventSnapshot].self, forKey: .counterEvents) ?? []
+            details = try container.decodeIfPresent([DetailsSnapshot].self, forKey: .details) ?? []
         }
 
         public init(
@@ -222,7 +232,8 @@ public enum BackupFormat {
             references: [ReferenceSnapshot],
             checkpoints: [CheckpointSnapshot] = [],
             counters: [CounterSnapshot] = [],
-            counterEvents: [CounterEventSnapshot] = []
+            counterEvents: [CounterEventSnapshot] = [],
+            details: [DetailsSnapshot] = []
         ) {
             self.schemaVersion = schemaVersion
             self.createdAt = createdAt
@@ -235,6 +246,7 @@ public enum BackupFormat {
             self.checkpoints = checkpoints
             self.counters = counters
             self.counterEvents = counterEvents
+            self.details = details
         }
     }
 
@@ -416,6 +428,23 @@ public enum BackupFormat {
             }
             guard replayed == counter.value else {
                 throw BackupError.invalidCountOrHistory(detail: "counter \(counter.name.prefix(20)) does not match history")
+            }
+        }
+
+        // --- Structured details (issue #20) ----------------------------------
+        var seenDetailOwners: Set<UUID> = []
+        for entry in manifest.details {
+            guard seenDetailOwners.insert(entry.ownerID).inserted else {
+                throw BackupError.duplicateID(kind: "details", id: entry.ownerID.uuidString)
+            }
+            let ownerExists = entry.isPieceOverride
+                ? seenPieceIDs.contains(entry.ownerID)
+                : entry.ownerID == manifest.project.id
+            guard ownerExists else {
+                throw BackupError.danglingReference(kind: entry.isPieceOverride ? "piece" : "project", id: entry.ownerID.uuidString)
+            }
+            guard entry.value.isValid, !entry.value.isEmpty else {
+                throw BackupError.invalidCountOrHistory(detail: "invalid project details")
             }
         }
 
@@ -654,6 +683,9 @@ public enum BackupFormat {
                 createdAt: event.createdAt
             )
         }
+        let details = manifest.details.map { entry in
+            DetailsSnapshot(ownerID: mapped(entry.ownerID), isPieceOverride: entry.isPieceOverride, value: entry.value)
+        }
         let bytes = Dictionary(uniqueKeysWithValues: validated.documentBytes.map { (mapped($0.key), $0.value) })
         return ProjectSnapshotBundle(
             manifest: Manifest(
@@ -667,7 +699,8 @@ public enum BackupFormat {
                 references: references,
                 checkpoints: checkpoints,
                 counters: counters,
-                counterEvents: counterEvents
+                counterEvents: counterEvents,
+                details: details
             ),
             documentBytes: bytes
         )

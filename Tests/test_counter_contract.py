@@ -36,9 +36,9 @@ class CounterContractTests(unittest.TestCase):
     def test_counters_migrate_without_changing_history_and_backup_preserves_ids(self):
         factory = text("Persistence/RowStoreFactory.swift")
         backup = text("Backup/BackupFormat.swift")
-        self.assertRegex(factory, r"schemaVersion = 7")
+        self.assertRegex(factory, r"schemaVersion = 9")
         self.assertIn("StoredNamedCounter.self, StoredCounterEvent.self", factory)
-        self.assertRegex(backup, r"schemaVersion = 3")
+        self.assertRegex(backup, r"schemaVersion = 5")
         self.assertIn("decodeIfPresent([CounterSnapshot]", backup)
         self.assertIn("decodeIfPresent([CounterEventSnapshot]", backup)
         self.assertIn("counter \\(", backup)
