@@ -654,7 +654,6 @@ public enum BackupFormat {
         }
         return bytes
     }
-}
 
     // MARK: - ID remapping (import as a *new* project)
 
