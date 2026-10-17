@@ -1,5 +1,7 @@
 import SwiftUI
 import PDFKit
+import PhotosUI
+import UIKit
 
 /// The layout seam from PLAN.md ("Adaptive layout seam"): arrangement is
 /// chosen *only* from available width and accessibility traits, and state
@@ -712,6 +714,12 @@ private struct DetailsEditor: View {
     @State private var stitches = ""
     @State private var rows = ""
     @State private var measurement = ""
+    @State private var selectedPhoto: PhotosPickerItem?
+    @State private var newPhotoDescription = ""
+    @State private var photoToRemove: UUID?
+    @State private var pendingPhotoData: Data?
+    @State private var editingPhotoID: UUID?
+    @State private var editingDescription = ""
 
     var body: some View {
         NavigationStack {
@@ -745,6 +753,79 @@ private struct DetailsEditor: View {
                     .keyboardType(.decimalPad).accessibilityIdentifier("details.rows")
                 TextField(imperial ? "Measurement (in)" : "Measurement (mm)", text: $measurement)
                     .keyboardType(.decimalPad).accessibilityIdentifier("details.measurement")
+
+                Section("Progress photos") {
+                    Text("Photos belong to this project. Full backups include them; progress-only exports do not.")
+                        .font(.footnote)
+                    PhotosPicker(selection: $selectedPhoto, matching: .images) {
+                        Label("Choose progress photo", systemImage: "photo.on.rectangle.angled")
+                    }
+                    .disabled(model.progressPhotos.count >= PhotoRepository.maximumPhotosPerProject)
+                    .accessibilityIdentifier("details.addPhoto")
+                    .onChange(of: selectedPhoto) { _, item in
+                        Task { await loadSelectedPhoto(item) }
+                    }
+                    if pendingPhotoData != nil {
+                        TextField("Photo description (optional)", text: $newPhotoDescription)
+                            .accessibilityIdentifier("details.newPhotoDescription")
+                        Button("Save photo") {
+                            if let data = pendingPhotoData {
+                                model.addProgressPhoto(data: data, description: newPhotoDescription)
+                                pendingPhotoData = nil
+                                newPhotoDescription = ""
+                                selectedPhoto = nil
+                            }
+                        }
+                        .disabled(newPhotoDescription.count > PhotoRepository.maximumDescriptionLength)
+                        .accessibilityIdentifier("details.savePhoto")
+                    }
+                    ForEach(model.progressPhotos) { photo in
+                        HStack {
+                            if let image = UIImage(contentsOfFile: model.progressPhotoURL(photo).path) {
+                                Image(uiImage: image)
+                                    .resizable()
+                                    .scaledToFit()
+                                    .frame(maxWidth: 96, maxHeight: 96)
+                                    .accessibilityLabel(photo.photoDescription.isEmpty ? "Progress photo" : photo.photoDescription)
+                            } else {
+                                Image(systemName: "photo.badge.exclamationmark")
+                                    .accessibilityLabel("Progress photo missing from storage")
+                            }
+                            VStack(alignment: .leading) {
+                                Text(photo.photoDescription.isEmpty ? "No description" : photo.photoDescription)
+                                Button("Edit description") {
+                                    editingPhotoID = photo.id
+                                    editingDescription = photo.photoDescription
+                                }
+                                .accessibilityIdentifier("details.editPhotoDescription")
+                            }
+                            Spacer()
+                            Button("Remove photo", role: .destructive) { photoToRemove = photo.id }
+                                .accessibilityIdentifier("details.removePhoto")
+                        }
+                    }
+                }
+            }
+            .confirmationDialog("Remove photo from this project?", isPresented: Binding(
+                get: { photoToRemove != nil },
+                set: { if !$0 { photoToRemove = nil } }
+            )) {
+                Button("Remove photo", role: .destructive) {
+                    if let id = photoToRemove { model.removeProgressPhoto(id) }
+                    photoToRemove = nil
+                }
+            }
+            .alert("Photo description", isPresented: Binding(
+                get: { editingPhotoID != nil },
+                set: { if !$0 { editingPhotoID = nil } }
+            )) {
+                TextField("Description", text: $editingDescription)
+                Button("Save") {
+                    if let id = editingPhotoID { model.describeProgressPhoto(id, text: editingDescription) }
+                    editingPhotoID = nil
+                }
+                .disabled(editingDescription.count > PhotoRepository.maximumDescriptionLength)
+                Button("Cancel", role: .cancel) { editingPhotoID = nil }
             }
             .navigationTitle("Project details")
             .toolbar {
@@ -756,6 +837,23 @@ private struct DetailsEditor: View {
                 }
             }
             .onAppear { imperial = model.usesImperialDisplay; load() }
+        }
+    }
+
+    private func loadSelectedPhoto(_ item: PhotosPickerItem?) async {
+        guard let item else { return }
+        do {
+            guard let data = try await item.loadTransferable(type: Data.self),
+                  !data.isEmpty,
+                  data.count <= PhotoRepository.maximumPhotoBytes else {
+                model.lastError = .other("Photo is missing or larger than 10 MiB.")
+                selectedPhoto = nil
+                return
+            }
+            pendingPhotoData = data
+        } catch {
+            model.lastError = .other("Could not load selected photo.")
+            selectedPhoto = nil
         }
     }
 

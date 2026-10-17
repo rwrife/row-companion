@@ -84,8 +84,9 @@ public enum BackupFormat {
     /// v2 adds `checkpoints` (issue #18). v3 adds `counters` and
     /// `counterEvents` (issue #16); older manifests decode as empty.
     /// v4 is reserved for the in-flight annotations branch; v5 adds
-    /// `details` (issue #20); older manifests decode as empty.
-    public static let schemaVersion = 5
+    /// `details` (issue #20); v6 adds opt-in `photos` for full backups.
+    public static let schemaVersion = 6
+    public static let photosDirectoryName = "photos"
     /// Restores refuse manifests stamped by a future schema (fail closed).
     public static let minimumSupportedVersion = 1
     /// Combined file-size cap for a staged restore (PLAN.md: 200 MiB).
@@ -185,6 +186,16 @@ public enum BackupFormat {
         public var value: ProjectDetails
     }
 
+    public struct PhotoSnapshot: Codable, Equatable, Sendable {
+        public var id: UUID
+        public var ownerID: UUID
+        public var relativePath: String
+        public var photoDescription: String
+        public var sha256: String
+        public var fileSize: Int
+        public var createdAt: Date
+    }
+
     /// The versioned manifest written at export time.
     public struct Manifest: Codable, Equatable, Sendable {
         public var schemaVersion: Int
@@ -199,10 +210,11 @@ public enum BackupFormat {
         public var counters: [CounterSnapshot]
         public var counterEvents: [CounterEventSnapshot]
         public var details: [DetailsSnapshot]
+        public var photos: [PhotoSnapshot]
 
         enum CodingKeys: String, CodingKey {
             case schemaVersion, createdAt, includesOriginals, project, pieces, events, documents, references, checkpoints
-            case counters, counterEvents, details
+            case counters, counterEvents, details, photos
         }
 
         public init(from decoder: Decoder) throws {
@@ -219,6 +231,7 @@ public enum BackupFormat {
             counters = try container.decodeIfPresent([CounterSnapshot].self, forKey: .counters) ?? []
             counterEvents = try container.decodeIfPresent([CounterEventSnapshot].self, forKey: .counterEvents) ?? []
             details = try container.decodeIfPresent([DetailsSnapshot].self, forKey: .details) ?? []
+            photos = try container.decodeIfPresent([PhotoSnapshot].self, forKey: .photos) ?? []
         }
 
         public init(
@@ -233,7 +246,8 @@ public enum BackupFormat {
             checkpoints: [CheckpointSnapshot] = [],
             counters: [CounterSnapshot] = [],
             counterEvents: [CounterEventSnapshot] = [],
-            details: [DetailsSnapshot] = []
+            details: [DetailsSnapshot] = [],
+            photos: [PhotoSnapshot] = []
         ) {
             self.schemaVersion = schemaVersion
             self.createdAt = createdAt
@@ -247,6 +261,7 @@ public enum BackupFormat {
             self.counters = counters
             self.counterEvents = counterEvents
             self.details = details
+            self.photos = photos
         }
     }
 
@@ -255,6 +270,14 @@ public enum BackupFormat {
         public let manifest: Manifest
         /// Document ID → validated staged PDF bytes.
         public let documentBytes: [UUID: Data]
+        /// Photo ID → validated staged photo bytes.
+        public let photoBytes: [UUID: Data]
+
+        public init(manifest: Manifest, documentBytes: [UUID: Data], photoBytes: [UUID: Data] = [:]) {
+            self.manifest = manifest
+            self.documentBytes = documentBytes
+            self.photoBytes = photoBytes
+        }
     }
 
     // MARK: - Path policy
@@ -493,6 +516,27 @@ public enum BackupFormat {
             }
         }
 
+        // --- Photos (issue #20 progress photos) ------------------------------
+        var seenPhotoIDs: Set<UUID> = []
+        for photo in manifest.photos {
+            guard seenPhotoIDs.insert(photo.id).inserted else {
+                throw BackupError.duplicateID(kind: "photo", id: photo.id.uuidString)
+            }
+            guard photo.ownerID == manifest.project.id else {
+                throw BackupError.danglingReference(kind: "project", id: photo.ownerID.uuidString)
+            }
+            guard photo.relativePath == "RowCompanionPhotos/\(photo.id.uuidString).jpg",
+                  photo.photoDescription.count <= 200,
+                  photo.sha256.count == 64,
+                  photo.sha256.utf8.allSatisfy({ (48...57).contains($0) || (97...102).contains($0) }),
+                  photo.fileSize > 0, photo.fileSize <= 10 * 1024 * 1024 else {
+                throw BackupError.invalidCountOrHistory(detail: "invalid progress photo")
+            }
+        }
+        guard manifest.photos.count <= 10 else {
+            throw BackupError.invalidCountOrHistory(detail: "too many progress photos")
+        }
+
         // --- Path policy for the whole manifest ------------------------------
         // Path validity + uniqueness are manifest-level checks and run
         // BEFORE any per-file inspection, so a duplicated or hostile path is
@@ -512,9 +556,21 @@ public enum BackupFormat {
                 throw BackupError.sizeMismatch(entry: relative)
             }
         }
+        for photo in manifest.photos {
+            let relative = photo.relativePath
+            guard isValidRelativePath(relative) else {
+                throw relative.contains("..")
+                    ? BackupError.traversalPath(entry: relative)
+                    : BackupError.absolutePath(entry: relative)
+            }
+            guard declaredPaths.insert(relative).inserted else {
+                throw BackupError.duplicatePath(entry: relative)
+            }
+        }
 
         // --- Staged files ----------------------------------------------------
         var acceptedBytes: [UUID: Data] = [:]
+        var acceptedPhotoBytes: [UUID: Data] = [:]
         var totalBytes = 0
         for document in manifest.documents {
             let relative = document.relativePath
@@ -523,58 +579,82 @@ public enum BackupFormat {
             // (manifest relative paths are app-internal and need not mirror
             // the backup layout).
             let leaf = relative.components(separatedBy: "/").last ?? relative
-            guard isValidRelativePath(leaf) else {
-                throw BackupError.traversalPath(entry: relative)
-            }
-            let url = stagedDirectory
-                .appendingPathComponent(originalsDirectoryName, isDirectory: true)
-                .appendingPathComponent(leaf, isDirectory: false)
-
-            // Compare against the *resolved* staging root: this catches a
-            // symlinked `originals/` directory or intermediate component,
-            // while tolerating OS-level symlinks above the staging root
-            // (e.g. /var → /private/var in test temp dirs).
-            let resolvedStaged = stagedDirectory.resolvingSymlinksInPath()
-            let expectedPath = resolvedStaged
-                .appendingPathComponent(originalsDirectoryName, isDirectory: true)
-                .appendingPathComponent(leaf, isDirectory: false)
-                .standardizedFileURL.path
-            let leafResolvesThroughSymlink = url.resolvingSymlinksInPath().standardizedFileURL.path != expectedPath
-            let values: URLResourceValues
-            do {
-                values = try url.resourceValues(forKeys: [
-                    .isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey,
-                ])
-            } catch {
-                throw BackupError.missingFile(entry: relative)
-            }
-            guard values.isSymbolicLink != true, !leafResolvesThroughSymlink else {
-                throw BackupError.symlink(entry: relative)
-            }
-            guard values.isRegularFile == true else {
-                throw BackupError.notRegularFile(entry: relative)
-            }
-            let actualSize = values.fileSize ?? 0
-            guard actualSize == document.fileSize else {
-                throw BackupError.sizeMismatch(entry: relative)
-            }
-            totalBytes += actualSize
-            guard totalBytes <= maximumTotalBytes else {
-                throw BackupError.oversizedTotal(byteCount: totalBytes)
-            }
-
-            guard let bytes = try? Data(contentsOf: url) else {
-                throw BackupError.missingFile(entry: relative)
-            }
-            let hex = lowercaseHexDigest([UInt8](bytes))
-            let expected = document.sha256.lowercased()
-            guard expected.count == 64, hex == expected else {
-                throw BackupError.hashMismatch(entry: relative)
-            }
+            let bytes = try stagedFileBytes(leaf: leaf, relative: relative, expectedSize: document.fileSize,
+                                            expectedSHA256: document.sha256,
+                                            directoryName: originalsDirectoryName,
+                                            stagedDirectory: stagedDirectory,
+                                            totalBytes: &totalBytes)
             acceptedBytes[document.id] = bytes
         }
-        return ValidatedRestore(manifest: manifest, documentBytes: acceptedBytes)
+        for photo in manifest.photos {
+            let relative = photo.relativePath
+            let leaf = relative.components(separatedBy: "/").last ?? relative
+            let bytes = try stagedFileBytes(leaf: leaf, relative: relative, expectedSize: photo.fileSize,
+                                            expectedSHA256: photo.sha256,
+                                            directoryName: photosDirectoryName,
+                                            stagedDirectory: stagedDirectory,
+                                            totalBytes: &totalBytes)
+            acceptedPhotoBytes[photo.id] = bytes
+        }
+        return ValidatedRestore(manifest: manifest, documentBytes: acceptedBytes, photoBytes: acceptedPhotoBytes)
     }
+
+    /// One staged-file inspection: kind, symlink, size, hash, running total.
+    private static func stagedFileBytes(
+        leaf: String, relative: String, expectedSize: Int, expectedSHA256: String,
+        directoryName: String, stagedDirectory: URL, totalBytes: inout Int
+    ) throws -> Data {
+        guard isValidRelativePath(leaf) else {
+            throw BackupError.traversalPath(entry: relative)
+        }
+        let url = stagedDirectory
+            .appendingPathComponent(directoryName, isDirectory: true)
+            .appendingPathComponent(leaf, isDirectory: false)
+
+        // Compare against the *resolved* staging root: this catches a
+        // symlinked `originals/` directory or intermediate component,
+        // while tolerating OS-level symlinks above the staging root
+        // (e.g. /var → /private/var in test temp dirs).
+        let resolvedStaged = stagedDirectory.resolvingSymlinksInPath()
+        let expectedPath = resolvedStaged
+            .appendingPathComponent(directoryName, isDirectory: true)
+            .appendingPathComponent(leaf, isDirectory: false)
+            .standardizedFileURL.path
+        let leafResolvesThroughSymlink = url.resolvingSymlinksInPath().standardizedFileURL.path != expectedPath
+        let values: URLResourceValues
+        do {
+            values = try url.resourceValues(forKeys: [
+                .isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey,
+            ])
+        } catch {
+            throw BackupError.missingFile(entry: relative)
+        }
+        guard values.isSymbolicLink != true, !leafResolvesThroughSymlink else {
+            throw BackupError.symlink(entry: relative)
+        }
+        guard values.isRegularFile == true else {
+            throw BackupError.notRegularFile(entry: relative)
+        }
+        let actualSize = values.fileSize ?? 0
+        guard actualSize == expectedSize else {
+            throw BackupError.sizeMismatch(entry: relative)
+        }
+        totalBytes += actualSize
+        guard totalBytes <= maximumTotalBytes else {
+            throw BackupError.oversizedTotal(byteCount: totalBytes)
+        }
+
+        guard let bytes = try? Data(contentsOf: url) else {
+            throw BackupError.missingFile(entry: relative)
+        }
+        let hex = lowercaseHexDigest([UInt8](bytes))
+        let expected = expectedSHA256.lowercased()
+        guard expected.count == 64, hex == expected else {
+            throw BackupError.hashMismatch(entry: relative)
+        }
+        return bytes
+    }
+}
 
     // MARK: - ID remapping (import as a *new* project)
 
@@ -686,7 +766,19 @@ public enum BackupFormat {
         let details = manifest.details.map { entry in
             DetailsSnapshot(ownerID: mapped(entry.ownerID), isPieceOverride: entry.isPieceOverride, value: entry.value)
         }
+        let photos = manifest.photos.map { photo in
+            PhotoSnapshot(
+                id: mapped(photo.id),
+                ownerID: mapped(photo.ownerID),
+                relativePath: "RowCompanionPhotos/\(mapped(photo.id).uuidString).jpg",
+                photoDescription: photo.photoDescription,
+                sha256: photo.sha256,
+                fileSize: photo.fileSize,
+                createdAt: photo.createdAt
+            )
+        }
         let bytes = Dictionary(uniqueKeysWithValues: validated.documentBytes.map { (mapped($0.key), $0.value) })
+        let pBytes = Dictionary(uniqueKeysWithValues: validated.photoBytes.map { (mapped($0.key), $0.value) })
         return ProjectSnapshotBundle(
             manifest: Manifest(
                 schemaVersion: manifest.schemaVersion,
@@ -700,9 +792,11 @@ public enum BackupFormat {
                 checkpoints: checkpoints,
                 counters: counters,
                 counterEvents: counterEvents,
-                details: details
+                details: details,
+                photos: photos
             ),
-            documentBytes: bytes
+            documentBytes: bytes,
+            photoBytes: pBytes
         )
     }
 }
@@ -712,10 +806,13 @@ public struct ProjectSnapshotBundle: Sendable {
     public let manifest: BackupFormat.Manifest
     /// PDF bytes keyed by the *new* document IDs.
     public let documentBytes: [UUID: Data]
+    /// Photo bytes keyed by the *new* photo IDs.
+    public let photoBytes: [UUID: Data]
 
-    public init(manifest: BackupFormat.Manifest, documentBytes: [UUID: Data]) {
+    public init(manifest: BackupFormat.Manifest, documentBytes: [UUID: Data], photoBytes: [UUID: Data] = [:]) {
         self.manifest = manifest
         self.documentBytes = documentBytes
+        self.photoBytes = photoBytes
     }
 }
 

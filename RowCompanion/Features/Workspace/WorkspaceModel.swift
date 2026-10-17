@@ -84,6 +84,8 @@ public final class WorkspaceModel {
     /// piece-override set for the selected piece.
     public private(set) var projectDetails = ProjectDetails()
     public private(set) var pieceDetails = ProjectDetails()
+    /// Progress photos belong to the project, not a piece or layout pane.
+    public private(set) var progressPhotos: [ProgressPhotoRecord] = []
     /// Local display preference; no conversion or rewrite of stored values.
     public var usesImperialDisplay = false
 
@@ -401,6 +403,31 @@ public final class WorkspaceModel {
     private func loadDetails() {
         projectDetails = selectedProjectID.flatMap { try? repository.details(forProject: $0) } ?? ProjectDetails()
         pieceDetails = selectedPieceID.flatMap { try? repository.details(forPiece: $0) } ?? ProjectDetails()
+        progressPhotos = selectedProjectID.flatMap { try? repository.photos(forOwner: $0) } ?? []
+    }
+
+    public func addProgressPhoto(data: Data, description: String) {
+        guard let projectID = selectedProjectID else { lastError = .noProjectSelected; return }
+        do {
+            _ = try repository.attachPhoto(data: data, description: description, ownerID: projectID)
+            loadDetails()
+        } catch let error as PhotoError {
+            lastError = .other(error.userMessage)
+        } catch { reportPersist(error) }
+    }
+
+    public func removeProgressPhoto(_ id: UUID) {
+        do { try repository.removePhoto(id); loadDetails() }
+        catch { reportPersist(error); loadDetails() }
+    }
+
+    public func describeProgressPhoto(_ id: UUID, text: String) {
+        do { try repository.setPhotoDescription(text, for: id); loadDetails() }
+        catch { reportPersist(error); loadDetails() }
+    }
+
+    public func progressPhotoURL(_ photo: ProgressPhotoRecord) -> URL {
+        repository.photoFileURL(photo.relativePath)
     }
 
     /// Project defaults with the selected piece's overrides applied.

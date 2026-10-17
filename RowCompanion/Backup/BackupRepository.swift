@@ -94,6 +94,13 @@ extension RowRepository {
         let details: [BackupFormat.DetailsSnapshot] = try storedDetails(ownerIDs: detailOwners).map {
             BackupFormat.DetailsSnapshot(ownerID: $0.ownerID, isPieceOverride: $0.isPieceOverride, value: $0.record)
         }.sorted { $0.ownerID.uuidString < $1.ownerID.uuidString }
+        let photos: [BackupFormat.PhotoSnapshot] = try self.photos(forOwner: projectID).map { photo in
+            BackupFormat.PhotoSnapshot(
+                id: photo.id, ownerID: photo.ownerID, relativePath: photo.relativePath,
+                photoDescription: photo.photoDescription, sha256: photo.sha256,
+                fileSize: photo.fileSize, createdAt: photo.createdAt
+            )
+        }
         let documentSnapshots: [BackupFormat.DocumentSnapshot] = documents.map { doc in
             // The recorded size is the size of the app-owned copy at export
             // time; a vanished file records 0 and therefore fails validation
@@ -127,7 +134,8 @@ extension RowRepository {
             checkpoints: checkpoints,
             counters: counters,
             counterEvents: counterEvents,
-            details: details
+            details: details,
+            photos: photos
         )
     }
 
@@ -210,6 +218,13 @@ extension RowRepository {
         for entry in manifest.details {
             context.insert(StoredProjectDetails(ownerID: entry.ownerID, isPieceOverride: entry.isPieceOverride, details: entry.value))
         }
+        for photo in manifest.photos {
+            context.insert(StoredProgressPhoto(
+                id: photo.id, ownerID: photo.ownerID, relativePath: photo.relativePath,
+                photoDescription: photo.photoDescription, sha256: photo.sha256,
+                fileSize: photo.fileSize, createdAt: photo.createdAt
+            ))
+        }
         do {
             try commit()
         } catch {
@@ -272,6 +287,8 @@ extension RowRepository {
         var detailOwnerIDs = pieceIDs
         detailOwnerIDs.insert(projectID)
         let detailRows = try storedDetails(ownerIDs: detailOwnerIDs)
+        let photoRows = try storedPhotos(ownerIDs: [projectID])
+        let photoURLs = photoRows.map { photoFileURL($0.relativePath) }
         for object in events { context.delete(object) }
         for object in references { context.delete(object) }
         for object in reminders { context.delete(object) }
@@ -280,6 +297,7 @@ extension RowRepository {
         for object in counters { context.delete(object) }
         for object in documents { context.delete(object) }
         for object in detailRows { context.delete(object) }
+        for object in photoRows { context.delete(object) }
         for object in pieces { context.delete(object) }
         for entry in libraryEntries { context.delete(entry) }
         context.delete(project)
@@ -293,6 +311,9 @@ extension RowRepository {
         // Records are durably gone; now remove their app-owned bytes. A
         // failure here leaves orphaned files but never orphaned records.
         for url in ownedFileURLs {
+            try? FileManager.default.removeItem(at: url)
+        }
+        for url in photoURLs {
             try? FileManager.default.removeItem(at: url)
         }
     }
