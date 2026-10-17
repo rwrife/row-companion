@@ -30,14 +30,15 @@ public enum RowStoreFactory {
     /// v8 is reserved for the in-flight workspace-session model (issue #13);
     /// gaps are safe because the reader gate only rejects newer-than-known
     /// stamps. v9 adds `StoredProjectDetails` (issue #20) additively — legacy
-    /// projects read as empty details.
-    public static let schemaVersion = 9
+    /// projects read as empty details. v10 adds `StoredProgressPhoto` (issue #20).
+    public static let schemaVersion = 10
 
     public static var schema: Schema {
         Schema([StoredProject.self, StoredPiece.self, StoredRowEvent.self, StoredStoreInfo.self,
                 StoredPatternDocument.self, StoredReferenceState.self,
                 StoredShapingReminder.self, StoredProgressCheckpoint.self, StoredLibraryEntry.self,
-                StoredNamedCounter.self, StoredCounterEvent.self, StoredProjectDetails.self])
+                StoredNamedCounter.self, StoredCounterEvent.self, StoredProjectDetails.self,
+                StoredProgressPhoto.self])
     }
 
     /// Local, non-mirrored configuration for the given store URL.

@@ -33,7 +33,7 @@ class CheckpointContractTests(unittest.TestCase):
     def test_checkpoints_migrate_with_store_version(self):
         factory = (APP / 'Persistence' / 'RowStoreFactory.swift').read_text()
         self.assertIn('StoredProgressCheckpoint.self', factory)
-        self.assertRegex(factory, r'schemaVersion = [5-9]\b')
+        self.assertRegex(factory, r'schemaVersion = (?:[5-9]|10)\b')
 
     def test_project_deletion_removes_checkpoints(self):
         backup = (APP / 'Backup' / 'BackupRepository.swift').read_text()
