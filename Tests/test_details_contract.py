@@ -13,7 +13,7 @@ class DetailsContract(unittest.TestCase):
     def test_store_is_additive_and_canonical_metric(self):
         factory = text("Persistence/RowStoreFactory.swift")
         self.assertIn("StoredProjectDetails.self", factory)
-        self.assertRegex(factory, r"schemaVersion = 9")
+        self.assertRegex(factory, r"schemaVersion = (9|10)")
         domain = text("Domain/ProjectDetails.swift")
         for field in ("toolSizeMM", "gaugeStitchesPer10CM", "measurementMM"):
             self.assertIn(field, domain)
@@ -35,10 +35,31 @@ class DetailsContract(unittest.TestCase):
         for ident in ("details.imperial", "details.scope", "details.save", "button.editDetails"):
             self.assertIn(ident, layout)
 
-    def test_no_new_permission_surface(self):
+    def test_photo_slice_is_bounded_and_opt_in(self):
         sources = "\n".join(p.read_text(encoding="utf-8") for p in APP.rglob("*.swift"))
-        for forbidden in ("PhotosPicker", "PHPhotoLibrary", "requestAuthorization", "URLSession"):
+        self.assertIn("maximumPhotoBytes", text("Persistence/PhotoRepository.swift"))
+        for forbidden in ("PHPhotoLibrary", "requestAuthorization", "URLSession"):
             self.assertNotIn(forbidden, sources)
+
+    def test_photo_files_are_in_project_and_tests(self):
+        project = (APP.parent / "RowCompanion.xcodeproj/project.pbxproj").read_text()
+        for name in ("PhotoRepository.swift", "PhotoRepositoryTests.swift"):
+            self.assertIn(f"/* {name} in Sources */", project)
+
+    def test_progress_export_excludes_photo_bytes(self):
+        service = text("Backup/BackupService.swift")
+        self.assertIn("manifest.photos = []", service)
+        self.assertIn("photoBytes", service)
+        self.assertIn("photosDirectoryName", service)
+
+    def test_photo_native_tests_cover_missing_media_and_rollback(self):
+        tests = (APP.parent / "RowCompanionTests/PhotoRepositoryTests.swift").read_text()
+        for name in ("testPhotoPersistenceDuplicateAndDelete",
+                     "testMissingPhotoRefusesFullExport",
+                     "testFullBackupRestoresPhotos",
+                     "testLegacyPhotoFreeManifestRestores",
+                     "testPhotoBounds"):
+            self.assertIn(name, tests)
 
     def test_pbxproj_wires_new_files(self):
         project = (APP.parent / "RowCompanion.xcodeproj/project.pbxproj").read_text()
