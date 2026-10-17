@@ -78,9 +78,9 @@ public enum PhotoError: Error, Equatable, Sendable {
 
 @MainActor
 public enum PhotoRepository {
-    public static let maximumPhotoBytes = 10 * 1024 * 1024 // 10 MiB
-    public static let maximumPhotosPerProject = 10
-    public static let maximumDescriptionLength = 200
+    nonisolated public static let maximumPhotoBytes = 10 * 1024 * 1024 // 10 MiB
+    nonisolated public static let maximumPhotosPerProject = 10
+    nonisolated public static let maximumDescriptionLength = 200
 
     public static func photosDirectory(storeURL: URL) -> URL {
         storeURL
