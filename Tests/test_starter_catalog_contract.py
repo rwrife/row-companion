@@ -99,6 +99,17 @@ class StarterCatalogContractTests(unittest.TestCase):
             self.assertGreaterEqual(value, 1)
             self.assertLessEqual(value, 10_000)
 
+    def test_dishcloth_square_arithmetic_is_consistent(self):
+        # 20 sts and 40 rows per 10 cm: a 40-st 20 cm square needs 80
+        # rows. Slice 1 shipped "40 rows" (a 10 cm piece) and a reminder
+        # at row 20 — this pins the corrected numbers.
+        block = PATTERN_SOURCE[PATTERN_SOURCE.index('id: "garter-dishcloth"'):]
+        block = block[: block.index("\n        StarterPattern(") if "\n        StarterPattern(" in block else len(block)]
+        self.assertIn("until 80 rows are complete", block)
+        self.assertNotIn("until 40 rows are complete", block)
+        self.assertIn("startRow: 40", block)
+        self.assertIn("40 sts and 80 rows", block)
+
 
 if __name__ == "__main__":
     unittest.main()

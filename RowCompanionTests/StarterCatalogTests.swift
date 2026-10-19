@@ -36,6 +36,18 @@ final class StarterCatalogTests: XCTestCase {
         XCTAssertFalse(knits.isEmpty)
         XCTAssertFalse(crochets.isEmpty)
     }
+
+    func testDishclothRowCountMatchesSquareGauge() throws {
+        let dishcloth = try XCTUnwrap(StarterCatalog.patterns.first { $0.id == "garter-dishcloth" })
+        // 20 stitches / 10 cm and 40 rows / 10 cm: 40 stitches
+        // need 80 rows for a 20 cm square, not 40 rows.
+        let stitches = 40
+        let rows = 80
+        XCTAssertEqual(Double(stitches) / 20 * 10, Double(rows) / 40 * 10)
+        XCTAssertTrue(dishcloth.instructions.joined(separator: " ").contains("80 rows"))
+        XCTAssertTrue(dishcloth.pieces[0].instructions.contains("80 rows"))
+        XCTAssertEqual(dishcloth.pieces[0].reminders[0].startRow, rows / 2)
+    }
 }
 
 /// Persistence tests for starting a project from a starter pattern.

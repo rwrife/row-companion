@@ -290,10 +290,10 @@ public enum StarterCatalog {
             terminology: "US terms — k: knit; RS: right side; WS: wrong side.",
             instructions: [
                 "Cast on 40 sts.",
-                "Work garter stitch (knit every row) until 40 rows are complete; the 2-row repeat tracks right and wrong sides.",
-                "Check the piece against a ruler at the 20-row reminder — garter squares want to stay square.",
+                "Work garter stitch (knit every row) until 80 rows are complete; the 2-row repeat tracks right and wrong sides.",
+                "Check the piece against a ruler at the 40-row halfway reminder — garter squares want to stay square.",
                 "Bind off in pattern and weave ends. Wash and block flat per yarn label.",
-                "Accessibility text alternative: no chart — every row is knit; 40 rows and 40 sts make about 20 cm at sample gauge.",
+                "Accessibility text alternative: no chart — every row is knit; 40 sts and 80 rows make about 20 cm at sample gauge.",
             ],
             pieces: [
                 StarterPieceSpec(
@@ -302,14 +302,14 @@ public enum StarterCatalog {
                     instructions: """
                     GARTER SQUARE DISHCLOTH — draft v1, original Row Companion authored content, MIT license.
                     US terms. Cotton DK, about 50 g (100 m); 4 mm needles.
-                    Cast on 40 sts. Knit every row (garter) until 40 rows are complete.
+                    Cast on 40 sts. Knit every row (garter) until 80 rows are complete.
                     Bind off in pattern. Weave ends; wash and block flat.
-                    Gauge target: about 20 sts and 40 rows per 10 cm in garter after washing; swatch first — 40 sts and 40 rows should give roughly a 20 cm square.
+                    Gauge target: about 20 sts and 40 rows per 10 cm in garter after washing; swatch first — 40 sts and 80 rows should give roughly a 20 cm square.
                     The 2-row repeat marks RS/WS alternation only; there is no shaping.
                     DRAFT: no independent review or test-make yet — verify gauge and stitch counts yourself.
                     """,
                     reminders: [
-                        StarterReminderSpec(instruction: "Halfway: check the square's width against a ruler", interval: nil, startRow: 20, endRow: nil)
+                        StarterReminderSpec(instruction: "Halfway: check the square's width against a ruler", interval: nil, startRow: 40, endRow: nil)
                     ]
                 ),
             ],
