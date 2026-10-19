@@ -185,6 +185,20 @@ public final class WorkspaceModel {
         }
     }
 
+    /// Start an independent editable project from a bundled starter pattern
+    /// (issue #22). The repository copies the blueprint into fresh durable
+    /// records; nothing here links the project back to the catalog, so a
+    /// later catalog revision cannot change this user's project.
+    public func startStarterPattern(_ pattern: StarterPattern) {
+        do {
+            let projectID = try repository.startStarterPattern(pattern)
+            select(project: projectID)
+            statusMessage = "Started from \(pattern.title). Edit anything freely."
+        } catch {
+            lastError = .rowActionFailed(error as? RowRepositoryError ?? .storeUnavailable(underlying: String(describing: error)))
+        }
+    }
+
     public func addPiece(name: String, repeatLength: Int?) {
         guard let projectID = selectedProjectID else {
             lastError = .noProjectSelected

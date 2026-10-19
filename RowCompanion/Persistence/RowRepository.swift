@@ -505,4 +505,49 @@ extension RowRepository {
             throw error
         }
     }
+
+    /// Start an independent, editable project from a bundled starter pattern
+    /// (issue #22 slice 1).
+    ///
+    /// The catalog pattern is a static blueprint: pieces, repeat lengths,
+    /// written instructions (stored as piece notes), and shaping reminders
+    /// are copied into brand-new database rows with fresh UUIDs and zero
+    /// completed rows. The started project owns no live reference back to the
+    /// catalog, so catalog updates never silently alter user progress.
+    @discardableResult
+    public func startStarterPattern(_ pattern: StarterPattern, title: String? = nil) throws -> UUID {
+        let validation = StarterCatalogRules.validationProblems(for: pattern)
+        guard validation.isEmpty else {
+            throw RowRepositoryError.saveFailed(underlying: "Pattern is invalid: \(validation.joined(separator: "; "))")
+        }
+        let chosenTitle = (title?.trimmingCharacters(in: .whitespacesAndNewlines)).flatMap { $0.isEmpty ? nil : $0 } ?? pattern.title
+        let projectID = UUID()
+        let now = Date()
+        context.insert(StoredProject(id: projectID, title: chosenTitle, createdAt: now, updatedAt: now))
+        for piece in pattern.pieces {
+            let pieceID = UUID()
+            context.insert(StoredPiece(
+                id: pieceID,
+                projectID: projectID,
+                name: piece.name,
+                completedRows: 0,
+                repeatLength: piece.repeatLength,
+                notes: piece.instructions
+            ))
+            for reminder in piece.reminders {
+                context.insert(StoredShapingReminder(
+                    id: UUID(),
+                    pieceID: pieceID,
+                    instruction: reminder.instruction,
+                    intervalRaw: reminder.interval,
+                    startRow: reminder.startRow,
+                    endRow: reminder.endRow,
+                    createdAt: now
+                ))
+            }
+        }
+        try commit()
+        return projectID
+    }
 }
+

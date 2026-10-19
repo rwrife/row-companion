@@ -10,6 +10,7 @@ struct ContentView: View {
     @Environment(WorkspaceModel.self) private var model
     @State private var showLibrary = false
     @State private var showNewProject = false
+    @State private var showStarterCatalog = false
     @State private var showNewPiece = false
     @State private var showImporter = false
     @State private var showExportSheet = false
@@ -61,6 +62,7 @@ struct ContentView: View {
         }
         .sheet(isPresented: $showLibrary) { ProjectLibraryView() }
         .sheet(isPresented: $showNewProject) { newProjectSheet }
+        .sheet(isPresented: $showStarterCatalog) { StarterCatalogView() }
         .sheet(isPresented: $showNewPiece) { newPieceSheet }
         .sheet(isPresented: $showExportSheet) { exportSheet }
         .sheet(
@@ -111,6 +113,8 @@ struct ContentView: View {
                 Menu {
                     Button("Project Library", action: { showLibrary = true })
                         .accessibilityIdentifier("menu.library")
+                    Button("Starter Patterns", action: { showStarterCatalog = true })
+                        .accessibilityIdentifier("menu.starterPatterns")
                     Button("New project", action: { showNewProject = true })
                         .accessibilityIdentifier("menu.newProject")
                     Button("New piece", action: { showNewPiece = true })
@@ -503,3 +507,193 @@ private struct LibraryEditView: View {
         }
     }
 }
+
+/// Offline starter pattern catalog (issue #22).
+///
+/// Browsable, searchable, filterable catalog of bundled original patterns.
+/// Shows difficulty, craft, materials, gauge, finished dimensions, written
+/// instructions, and preview illustrations labelled as generated artwork.
+/// Starting a project copies the blueprint into fresh editable records; the
+/// user edits counts, notes, and reminders independently of the catalog.
+struct StarterCatalogView: View {
+    @Environment(WorkspaceModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+    @State private var search = ""
+    @State private var selectedCraft: StarterPattern.Craft?
+    @State private var viewingPattern: StarterPattern?
+
+    private var filtered: [StarterPattern] {
+        StarterCatalog.patterns.filter { pattern in
+            if let craft = selectedCraft, pattern.craft != craft { return false }
+            return StarterCatalogRules.matches(pattern, search: search)
+        }
+    }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    Picker("Craft", selection: $selectedCraft) {
+                        Text("All crafts").tag(StarterPattern.Craft?.none)
+                        ForEach(StarterPattern.Craft.allCases, id: \.self) { craft in
+                            Text(craft.rawValue).tag(Optional(craft))
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .accessibilityIdentifier("catalog.craftPicker")
+                }
+
+                if filtered.isEmpty {
+                    Text(search.isEmpty ? "No starter patterns." : "No patterns match \"\(search)\".")
+                        .foregroundStyle(.secondary)
+                        .accessibilityIdentifier("catalog.empty")
+                }
+
+                ForEach(filtered) { pattern in
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack(alignment: .top, spacing: 12) {
+                            if let name = pattern.previewImageName {
+                                Image(name)
+                                    .resizable()
+                                    .scaledToFill()
+                                    .frame(width: 72, height: 72)
+                                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                                    .accessibilityLabel(pattern.previewAltText ?? pattern.title)
+                                    .accessibilityIdentifier("catalog.preview." + pattern.id)
+                            }
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(pattern.title)
+                                    .font(.headline)
+                                Text("\(pattern.craft.rawValue) · \(pattern.difficulty)")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                                Text(pattern.summary)
+                                    .font(.footnote)
+                                    .lineLimit(3)
+                            }
+                        }
+
+                        HStack {
+                            Button("View Pattern") { viewingPattern = pattern }
+                                .frame(minHeight: 44)
+                                .accessibilityIdentifier("catalog.view." + pattern.id)
+                            Spacer()
+                            Button("Start Project") {
+                                model.startStarterPattern(pattern)
+                                dismiss()
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .frame(minHeight: 44)
+                            .accessibilityIdentifier("catalog.start." + pattern.id)
+                        }
+                    }
+                    .padding(.vertical, 4)
+                }
+            }
+            .searchable(text: $search, prompt: "Search patterns, craft, materials")
+            .navigationTitle("Starter Patterns")
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                        .accessibilityIdentifier("catalog.done")
+                }
+            }
+            .sheet(item: $viewingPattern) { pattern in
+                StarterPatternDetailView(pattern: pattern) {
+                    model.startStarterPattern(pattern)
+                    viewingPattern = nil
+                    dismiss()
+                }
+            }
+        }
+    }
+}
+
+/// Accessible detail sheet: displays full pattern text, yarn, gauge, and
+/// preview provenance. "Start project" creates the independent workspace.
+private struct StarterPatternDetailView: View {
+    @Environment(\.dismiss) private var dismiss
+    let pattern: StarterPattern
+    let onStart: () -> Void
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    if let name = pattern.previewImageName {
+                        Image(name)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(maxWidth: .infinity)
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                            .accessibilityLabel(pattern.previewAltText ?? pattern.title)
+                        Text(pattern.previewAltText ?? "")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .accessibilityIdentifier("catalog.detail.previewCaption")
+                    }
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(pattern.title).font(.title.bold())
+                        Text("\(pattern.craft.rawValue) · \(pattern.difficulty)")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                        Text(StarterCatalogRules.reviewLabel(for: pattern))
+                            .font(.caption)
+                            .padding(4)
+                            .background(Color.yellow.opacity(0.2))
+                            .clipShape(RoundedRectangle(cornerRadius: 4))
+                            .accessibilityIdentifier("catalog.detail.reviewBadge")
+                    }
+
+                    Divider()
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        LabeledContent("Finished dimensions", value: pattern.finishedDimensions)
+                        LabeledContent("Materials", value: pattern.materials)
+                        if let gauge = pattern.gauge {
+                            LabeledContent("Gauge target", value: gauge)
+                        }
+                        if let yarn = pattern.yarnEstimate {
+                            LabeledContent("Yarn estimate", value: yarn)
+                        }
+                        LabeledContent("Terminology", value: pattern.terminology)
+                        LabeledContent("Author / License", value: "\(pattern.author) · \(pattern.license)")
+                    }
+                    .font(.subheadline)
+
+                    Divider()
+
+                    Text("Instructions").font(.headline)
+                    ForEach(Array(pattern.instructions.enumerated()), id: \.offset) { _, section in
+                        Text(section)
+                            .font(.body)
+                    }
+
+                    if let provenance = pattern.previewProvenance {
+                        Text(provenance)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .accessibilityIdentifier("catalog.detail.provenance")
+                    }
+
+                    Button("Start Project from This Pattern") {
+                        onStart()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                    .accessibilityIdentifier("catalog.detail.startButton")
+                }
+                .padding()
+            }
+            .navigationTitle("Pattern Details")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Close") { dismiss() }
+                        .accessibilityIdentifier("catalog.detail.close")
+                }
+            }
+        }
+    }
+}
+

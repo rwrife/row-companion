@@ -47,6 +47,34 @@ final class RowCompanionUITests: XCTestCase {
         app.buttons["button.addPiece"].tap()
     }
 
+    /// Issue #22: browse the offline catalog, filter, open details, and start an
+    /// independent project that begins at zero rows and keeps the workspace usable.
+    func testStarterCatalogBrowseAndStart() throws {
+        app.launch()
+        XCTAssertTrue(app.staticTexts["workspace.title"].waitForExistence(timeout: 15))
+        app.buttons["menu.add"].tap()
+        XCTAssertTrue(app.buttons["menu.starterPatterns"].waitForExistence(timeout: 5))
+        app.buttons["menu.starterPatterns"].tap()
+
+        let viewScarf = app.buttons["catalog.view.garter-scarf"]
+        XCTAssertTrue(viewScarf.waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["catalog.start.row-coaster"].exists, "Crochet pattern listed before filtering")
+
+        // Detail shows honest review state and generated-illustration labelling.
+        viewScarf.tap()
+        let badge = app.staticTexts["catalog.detail.reviewBadge"]
+        XCTAssertTrue(badge.waitForExistence(timeout: 5))
+        XCTAssertTrue(badge.label.contains("not yet reviewed"))
+        app.buttons["catalog.detail.close"].tap()
+
+        app.buttons["catalog.start.garter-scarf"].tap()
+
+        // Back in the workspace: a started project exists with zero completed rows.
+        XCTAssertTrue(app.staticTexts["row.completed"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["row.completed"].label.contains("0"))
+        XCTAssertTrue(app.buttons["control.completeRow"].exists)
+    }
+
     /// Run explicitly for store assets; attachments are real simulator pixels.
     func testCaptureAppStoreScreenshots() throws {
         guard ProcessInfo.processInfo.environment["RC_CAPTURE_SCREENSHOTS"] == "1" else {
