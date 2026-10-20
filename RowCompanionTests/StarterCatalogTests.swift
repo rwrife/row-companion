@@ -33,8 +33,48 @@ final class StarterCatalogTests: XCTestCase {
     func testCraftFilterWorks() {
         let knits = StarterCatalog.patterns.filter { $0.craft == .knitting }
         let crochets = StarterCatalog.patterns.filter { $0.craft == .crochet }
-        XCTAssertFalse(knits.isEmpty)
-        XCTAssertFalse(crochets.isEmpty)
+        XCTAssertEqual(knits.count, 3, "Expected three knit patterns.")
+        XCTAssertEqual(crochets.count, 3, "Expected three crochet patterns.")
+        XCTAssertEqual(StarterCatalog.patterns.count, 6, "Expected six shipped patterns.")
+    }
+
+    func testRibbedHeadbandStitchCountMultipleOfFour() throws {
+        let headband = try XCTUnwrap(StarterCatalog.patterns.first { $0.id == "ribbed-headband" })
+        // Cast-on 20 sts is a multiple of 4: *k2, p2* ends cleanly on p2.
+        // Sample gauge 20 sts / 10 cm gives 10 cm width; 24 rows / 10 cm gives
+        // ~115 rows for 48 cm.
+        XCTAssertEqual(20 % 4, 0)
+        XCTAssertTrue(headband.instructions.joined(separator: " ").contains("20 sts"))
+        XCTAssertTrue(headband.instructions.joined(separator: " ").contains("115 rows"))
+        XCTAssertEqual(headband.pieces[0].repeatLength, 2)
+    }
+
+    func testCrochetScarfLengthAndBlockArithmetic() throws {
+        let scarf = try XCTUnwrap(StarterCatalog.patterns.first { $0.id == "single-crochet-scarf" })
+        // 16 sc / 10 cm: 29 sc is ~18 cm width.
+        // 20 rows / 10 cm: 280 rows is 140 cm length (280 / 20 * 10 = 140).
+        // 20-row blocks evenly divide 280 (14 blocks total).
+        XCTAssertEqual(280 % 20, 0)
+        XCTAssertEqual(280 / 20, 14)
+        XCTAssertTrue(scarf.instructions.joined(separator: " ").contains("280 rows"))
+        let reminders = scarf.pieces[0].reminders
+        XCTAssertEqual(reminders.count, 1)
+        XCTAssertEqual(reminders[0].interval, 20)
+        XCTAssertEqual(reminders[0].startRow, 20)
+        XCTAssertEqual(reminders[0].endRow, 260)
+    }
+
+    func testCrochetDishclothSquareArithmetic() throws {
+        let dishcloth = try XCTUnwrap(StarterCatalog.patterns.first { $0.id == "single-crochet-dishcloth" })
+        // 18 sc / 10 cm: 36 sc is 20 cm.
+        // 20 rows / 10 cm: 40 rows is 20 cm.
+        // 36 sc and 40 rows make a true 20 cm square at sample gauge.
+        let stitches = 36
+        let rows = 40
+        XCTAssertEqual(Double(stitches) / 18 * 10, Double(rows) / 20 * 10)
+        XCTAssertTrue(dishcloth.instructions.joined(separator: " ").contains("36 sc"))
+        XCTAssertTrue(dishcloth.instructions.joined(separator: " ").contains("40 rows"))
+        XCTAssertEqual(dishcloth.pieces[0].reminders[0].startRow, 20)
     }
 
     func testDishclothRowCountMatchesSquareGauge() throws {

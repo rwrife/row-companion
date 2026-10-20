@@ -58,7 +58,18 @@ final class RowCompanionUITests: XCTestCase {
 
         let viewScarf = app.buttons["catalog.view.garter-scarf"]
         XCTAssertTrue(viewScarf.waitForExistence(timeout: 10))
-        XCTAssertTrue(app.buttons["catalog.start.row-coaster"].exists, "Crochet pattern listed before filtering")
+        // Six patterns now share one list; the crochet entry can sit below the
+        // fold, so scroll until it realizes instead of assuming it is visible.
+        let coasterStart = app.buttons["catalog.start.row-coaster"]
+        var coastersVisible = coasterStart.exists
+        for _ in 0..<5 where !coastersVisible {
+            app.tables.firstMatch.swipeUp()
+            coastersVisible = coasterStart.exists
+        }
+        XCTAssertTrue(coastersVisible, "Crochet pattern listed before filtering")
+        for _ in 0..<5 where !viewScarf.isHittable {
+            app.tables.firstMatch.swipeDown()
+        }
 
         // Detail shows honest review state and generated-illustration labelling.
         viewScarf.tap()

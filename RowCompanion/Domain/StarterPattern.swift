@@ -365,5 +365,133 @@ public enum StarterCatalog {
             license: "MIT",
             previewProvenance: "Preview generated 2026-10-18 by OpenAI Images API gpt-image-2.5-flare from this pattern's written specification; not yet checked by a maker."
         ),
+        StarterPattern(
+            id: "ribbed-headband",
+            version: 1,
+            title: "Flat Ribbed Headband",
+            craft: .knitting,
+            difficulty: "Beginner",
+            summary: "A 2-by-2 rib band worked flat and seamed; try it on before binding off.",
+            finishedDimensions: "About 10 cm wide and 48 cm around, unstretched at sample gauge; adjust length to fit",
+            materials: "About 50 g (80 m) worsted-weight wool; 4.5 mm needles; tapestry needle",
+            gauge: "About 20 sts and 24 rows per 10 cm in 2-by-2 rib, relaxed after washing; measure your swatch unstretched",
+            yarnEstimate: "About 80 m; varies with circumference and gauge",
+            terminology: "US knitting terms — k: knit; p: purl; RS: right side; WS: wrong side; sts: stitches.",
+            instructions: [
+                "Swatch 2-by-2 rib first. Cast on 20 sts using a stretchy cast-on; sample width is 10 cm at 20 sts per 10 cm.",
+                "Row 1 (RS): *k2, p2; repeat from * to end. Turn.",
+                "Row 2 (WS): *k2, p2; repeat from * to end. Turn. On a 20-stitch multiple of four, the first two wrong-side knits sit behind the last two right-side purls, so the rib columns align.",
+                "Repeat Rows 1–2 until about 115 rows are complete for 48 cm at sample row gauge. Measure around your head without overstretching and adjust the length before binding off; finished fit depends on yarn stretch.",
+                "Bind off loosely in pattern. Bring short edges together without twisting the band, seam them with the yarn tail, weave in ends, then wash and dry flat per yarn label.",
+                "Accessibility text alternative: no chart — each row repeats knit two, purl two across 20 stitches; every two rows repeat. The seam joins the two short ends.",
+            ],
+            pieces: [
+                StarterPieceSpec(
+                    name: "Band",
+                    repeatLength: 2,
+                    instructions: """
+                    FLAT RIBBED HEADBAND — draft v1, original Row Companion authored content, MIT license.
+                    US terms. Swatch 2-by-2 rib first; gauge about 20 sts and 24 rows per 10 cm relaxed after washing. About 50 g (80 m) worsted wool; 4.5 mm needles.
+                    Cast on 20 sts using a stretchy cast-on. Row 1 (RS): *k2, p2; repeat to end. Row 2 (WS): *k2, p2; repeat to end — on this multiple of four the knits come behind the previous purls, keeping rib columns aligned. Repeat Rows 1–2.
+                    Work about 115 rows for 48 cm at sample row gauge, then measure against your head before binding off; adjust length for comfortable stretch. Bind off loosely in pattern; join the short ends without twisting, weave ends and wash/dry flat per yarn label.
+                    DRAFT: no independent review or test-make yet — verify gauge, stitch counts and fit yourself.
+                    """,
+                    reminders: [
+                        StarterReminderSpec(instruction: "Check length and fit before binding off; 48 cm is a sample, not a fixed row count", interval: nil, startRow: 100, endRow: nil)
+                    ]
+                ),
+            ],
+            previewImageName: "StarterRibbedHeadband",
+            previewAltText: "Generated illustration of a rust-orange flat ribbed headband with a back seam. This is an illustration, not a photo of a test-made item; appearance changes with yarn, gauge, and technique.",
+            reviewState: .draftUnreviewed,
+            author: "Row Companion authors (original content)",
+            license: "MIT",
+            previewProvenance: "Preview generated 2026-10-20 by OpenAI Images API gpt-image-2.5-flare from the draft headband specification; visual details not yet checked by a maker."
+        ),
+        StarterPattern(
+            id: "single-crochet-scarf",
+            version: 1,
+            title: "Two-Color Crochet Scarf",
+            craft: .crochet,
+            difficulty: "Beginner",
+            summary: "A straight single-crochet scarf with optional color blocks every twenty rows.",
+            finishedDimensions: "About 18 cm wide and 140 cm long at sample gauge",
+            materials: "About 250 g (400 m) worsted-weight yarn in two contrasting colors; 5 mm hook; tapestry needle",
+            gauge: "About 16 sc and 20 rows per 10 cm after washing",
+            yarnEstimate: "About 400 m total; allow extra yarn for longer scarves or a different gauge",
+            terminology: "US crochet terms — ch: chain; sc: single crochet; sts: stitches; turning ch does not count as a stitch.",
+            instructions: [
+                "Make a gauge swatch. Chain 30 in color A. Row 1: sc in second ch from hook and each ch across (29 sc). Ch 1 and turn.",
+                "Rows 2–279: sc in each of 29 sts (29 sc); ch 1 and turn. For optional 20-row color blocks, work Rows 20, 40, 60 and so on normally until the last sc, then finish that stitch's final yarn-over with the new color; the turning chain and next row use the new color. Fasten off the old color at the edge and weave its tail in later. Each row remains 29 sc.",
+                "Row 280: sc in each of 29 sts, fasten off without a turning chain. At 20 rows per 10 cm, 280 rows give about 140 cm. Adjust length by working more or fewer complete rows.",
+                "Weave in all ends; wash and dry flat per yarn label. Check the fabric against a ruler as you work; gauge changes both finished width and yarn needed.",
+                "Accessibility text alternative: no chart — work 29 single crochet stitches on each row, with a turning chain between rows. Optional color change after each group of 20 rows.",
+            ],
+            pieces: [
+                StarterPieceSpec(
+                    name: "Scarf",
+                    repeatLength: 1,
+                    instructions: """
+                    TWO-COLOR CROCHET SCARF — draft v1, original Row Companion authored content, MIT license.
+                    US terms. About 250 g (400 m) worsted yarn in two colors; 5 mm hook; gauge about 16 sc and 20 rows per 10 cm after washing.
+                    Chain 30 in color A. Row 1: sc in second ch from hook and across (29 sc); ch 1, turn. Rows 2–279: sc in each of 29 sts; ch 1, turn after each row. For optional color blocks, change color on the final yarn-over of the last stitch of Rows 20, 40, 60 etc.; use the new color for the turning chain and next row. Fasten off the old color and weave ends later. Turning chains do not count as stitches.
+                    Row 280: 29 sc; fasten off without a turning chain. At sample gauge 29 sc gives about 18 cm width and 280 rows about 140 cm length. Adjust rows to fit. Weave ends; wash and dry flat per yarn label.
+                    The app's one-row repeat tracks the next row to work, not the optional color blocks.
+                    DRAFT: no independent review or test-make yet — verify gauge and yardage yourself.
+                    """,
+                    reminders: [
+                        StarterReminderSpec(instruction: "Optional color block boundary: finish this row's last stitch with the next color", interval: 20, startRow: 20, endRow: 260)
+                    ]
+                ),
+            ],
+            previewImageName: "StarterCrochetScarf",
+            previewAltText: "Generated illustration of a long yellow and charcoal crocheted scarf with color bands. This is an illustration, not a photo of a test-made item; appearance changes with yarn, gauge, and technique.",
+            reviewState: .draftUnreviewed,
+            author: "Row Companion authors (original content)",
+            license: "MIT",
+            previewProvenance: "Preview generated 2026-10-20 by OpenAI Images API gpt-image-2.5-flare from the draft scarf specification; visual details not yet checked by a maker."
+        ),
+        StarterPattern(
+            id: "single-crochet-dishcloth",
+            version: 1,
+            title: "Cotton Crochet Dishcloth",
+            craft: .crochet,
+            difficulty: "Beginner",
+            summary: "A dense cotton square with a single-crochet row repeat and no chart.",
+            finishedDimensions: "About 20 cm square at sample gauge",
+            materials: "About 75 g (110 m) worsted-weight cotton; 4 mm hook; tapestry needle",
+            gauge: "About 18 sc and 20 rows per 10 cm after washing",
+            yarnEstimate: "About 110 m; varies with gauge",
+            terminology: "US crochet terms — ch: chain; sc: single crochet; sts: stitches; turning ch does not count as a stitch.",
+            instructions: [
+                "Swatch before starting. Chain 37. Row 1: sc in second ch from hook and each ch across (36 sc). Ch 1 and turn; the turning chain does not count as a stitch.",
+                "Rows 2–39: sc in each of 36 sts (36 sc); ch 1 and turn after each row.",
+                "Row 40: sc in each of 36 sts (36 sc), then fasten off without a turning chain. At 18 sc and 20 rows per 10 cm, 36 sc and 40 rows make about 20 cm square.",
+                "Weave in ends; wash and dry flat per cotton yarn label. If your gauge differs, adjust starting chain and row count together rather than expecting a square automatically.",
+                "Accessibility text alternative: no chart — every row is 36 single crochet stitches, with one turning chain between rows.",
+            ],
+            pieces: [
+                StarterPieceSpec(
+                    name: "Dishcloth",
+                    repeatLength: 1,
+                    instructions: """
+                    COTTON CROCHET DISHCLOTH — draft v1, original Row Companion authored content, MIT license.
+                    US terms. About 75 g (110 m) worsted cotton; 4 mm hook; gauge about 18 sc and 20 rows per 10 cm after washing.
+                    Chain 37. Row 1: sc in second ch from hook and across (36 sc); ch 1, turn. Rows 2–39: sc in each of 36 sts; ch 1, turn after each row. Row 40: 36 sc, fasten off without a turning chain. Turning chains do not count as stitches.
+                    At sample gauge 36 sc and 40 rows give about 20 cm square. Adjust if your swatch differs. Weave ends; wash and dry flat per yarn label.
+                    DRAFT: no independent review or test-make yet — verify gauge and stitch counts yourself.
+                    """,
+                    reminders: [
+                        StarterReminderSpec(instruction: "Halfway: check width and length against a ruler", interval: nil, startRow: 20, endRow: nil)
+                    ]
+                ),
+            ],
+            previewImageName: "StarterCrochetDishcloth",
+            previewAltText: "Generated illustration of a warm-white single-crochet square dishcloth. This is an illustration, not a photo of a test-made item; appearance changes with yarn, gauge, and technique.",
+            reviewState: .draftUnreviewed,
+            author: "Row Companion authors (original content)",
+            license: "MIT",
+            previewProvenance: "Preview generated 2026-10-20 by OpenAI Images API gpt-image-2.5-flare from the draft dishcloth specification; visual details not yet checked by a maker."
+        ),
     ]
 }
