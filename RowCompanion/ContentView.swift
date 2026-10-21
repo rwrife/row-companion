@@ -543,6 +543,13 @@ struct StarterCatalogView: View {
                     .accessibilityIdentifier("catalog.craftPicker")
                 }
 
+                Section {
+                    Text("New here? Choose a draft starter pattern to make an editable project without a PDF. Patterns have not been independently reviewed or test-made; check gauge and instructions before relying on them. Already have a pattern? Use Add → New project, then Import pattern PDF.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .accessibilityIdentifier("catalog.introduction")
+                }
+
                 if filtered.isEmpty {
                     Text(search.isEmpty ? "No starter patterns." : "No patterns match \"\(search)\".")
                         .foregroundStyle(.secondary)

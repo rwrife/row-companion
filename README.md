@@ -1,6 +1,6 @@
 # Row Companion
 
-Local-first iPhone workspace for knitters and crocheters to keep pattern PDFs beside repeat-aware row counters and resume each piece without losing their place.
+Local-first iPhone workspace for knitters and crocheters to keep pattern PDFs — or one of six bundled draft starter patterns — beside repeat-aware row counters and resume each piece without losing their place.
 
 ## Status
 
@@ -13,6 +13,8 @@ Issue #14 adds a native local project library with organizational status and ind
 Hobby knitters and crocheters often switch between a PDF chart and a counter, then lose the chart location or confuse total rows with rows inside a motif repeat. Row Companion keeps the reference and per-piece progress together. Unlike a generic PDF reader, inventory, or timed recipe checklist, the central object is a **piece with reversible completed-row history and repeat arithmetic**.
 
 ## Intended workflow and use cases
+
+Start via **Add → Starter Patterns** for six original, offline draft patterns (three knit, three crochet). Browse/search by craft and materials; each detail includes written instructions, dimensions, yarn/gauge guidance, and a generated illustration with an accessible description. **Start Project** copies instructions into editable piece notes, gives each piece its own counter at zero, and does not link your project to later catalog changes. These drafts have **not** had independent maker review or physical test-making. Check stitch counts and your gauge before relying on them; illustrations are not photos of completed test-made items and appearance varies with yarn and technique. No catalog PDF or chart is bundled: instructions are readable text, with a text alternative for any referenced visual. Physical-device VoiceOver, airplane-mode first launch, maker review, test-makes, and backup/restore acceptance remain open in issue #22. README/store text describes draft feature, not launch approval.
 
 1. Create a project (for example a scarf) and copy a PDF you own or have permission to use through the system Files picker. A project can also use manual text notes with no PDF.
 2. Add named pieces (front, back, sleeve); set each piece's optional fixed repeat length and starting completed-row count.
