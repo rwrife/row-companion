@@ -92,6 +92,17 @@ class StarterCatalogContractTests(unittest.TestCase):
         rules = PATTERN_SOURCE
         self.assertIn("not yet reviewed or test-made", rules)
 
+    def test_draft_onboarding_and_store_copy_do_not_claim_review(self):
+        content = text("ContentView.swift")
+        self.assertIn('accessibilityIdentifier("catalog.introduction")', content)
+        self.assertIn("not been independently reviewed or test-made", content)
+        self.assertIn("Import pattern PDF", content)
+        self.assertIn("catalog.introduction", (ROOT / "RowCompanionUITests/RowCompanionUITests.swift").read_text())
+        listing = (ROOT / "AppStore/description.txt").read_text()
+        self.assertIn("draft starter patterns", listing)
+        self.assertIn("not been independently reviewed or test-made", listing)
+        self.assertNotIn("tested patterns", listing.lower())
+
     def test_repeat_lengths_stay_in_domain_bounds(self):
         lengths = [int(v) for v in re.findall(r'StarterPieceSpec\(\n\s+name: "[^"]+",\n\s+repeatLength: (\d+)', PATTERN_SOURCE)]
         self.assertTrue(lengths)

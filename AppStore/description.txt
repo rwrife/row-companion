@@ -1,6 +1,9 @@
 Keep your pattern and your progress together.
 
-Row Companion is a focused workspace for knitting and crochet. Bring your own PDF pattern, create a project, and track each piece one row at a time. From a scarf's first repeat to a cardigan's second sleeve, you can see what you've finished and what comes next.
+Row Companion is a focused workspace for knitting and crochet. Start with one of six original, offline draft starter patterns or bring your own PDF. Create a project and track each piece one row at a time. From a scarf's first repeat to a cardigan's second sleeve, see what you've finished and what comes next.
+
+START WITH A PATTERN
+Browse six draft starter patterns: three knitting and three crochet, with written instructions, materials, gauge guidance, and generated illustrations. Start Project copies the instructions into editable notes and starts each piece at zero rows. These drafts have not been independently reviewed or test-made; check instructions and your gauge before making. Illustrations are not photos of finished test-made items. Appearance varies with yarn, gauge, and technique.
 
 COUNT WITH CONFIDENCE
 Tap Complete row after each finished row. See your total completed rows, your next row within a repeat, and the number of repeats you've finished. Undo a mistaken tap or confirm a count correction when you need to make an adjustment.

@@ -56,6 +56,12 @@ final class RowCompanionUITests: XCTestCase {
         XCTAssertTrue(app.buttons["menu.starterPatterns"].waitForExistence(timeout: 5))
         app.buttons["menu.starterPatterns"].tap()
 
+        // Onboarding copy states the honest review state before browsing.
+        let introduction = app.staticTexts["catalog.introduction"]
+        XCTAssertTrue(introduction.waitForExistence(timeout: 10))
+        XCTAssertTrue(introduction.label.contains("not been independently reviewed"))
+        XCTAssertTrue(introduction.label.contains("Import pattern PDF"))
+
         let viewScarf = app.buttons["catalog.view.garter-scarf"]
         XCTAssertTrue(viewScarf.waitForExistence(timeout: 10))
         // Six patterns now share one list; the crochet entry can sit below the
