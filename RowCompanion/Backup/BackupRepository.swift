@@ -43,6 +43,7 @@ extension RowRepository {
         var checkpoints: [BackupFormat.CheckpointSnapshot] = []
         var counters: [BackupFormat.CounterSnapshot] = []
         var counterEvents: [BackupFormat.CounterEventSnapshot] = []
+        var reminders: [BackupFormat.ReminderSnapshot] = []
         for piece in pieces {
             for counter in try self.counters(for: piece.id) {
                 counters.append(BackupFormat.CounterSnapshot(
@@ -64,6 +65,17 @@ extension RowRepository {
                     id: checkpoint.id, pieceID: checkpoint.pieceID,
                     name: checkpoint.name, completedRows: checkpoint.completedRows,
                     repeatLength: checkpoint.repeatLength, createdAt: checkpoint.createdAt
+                ))
+            }
+            for stored in try storedReminders(pieceIDs: [piece.id]) {
+                reminders.append(BackupFormat.ReminderSnapshot(
+                    id: stored.id,
+                    pieceID: stored.pieceID,
+                    instruction: stored.instruction,
+                    interval: stored.intervalRaw,
+                    startRow: stored.startRow,
+                    endRow: stored.endRow,
+                    createdAt: stored.createdAt
                 ))
             }
             for event in try history(for: piece.id) {
@@ -121,7 +133,8 @@ extension RowRepository {
             references: references,
             checkpoints: checkpoints,
             counters: counters,
-            counterEvents: counterEvents
+            counterEvents: counterEvents,
+            reminders: reminders
         )
     }
 
@@ -200,6 +213,14 @@ extension RowRepository {
                 rowEventID: event.rowEventID, undoneEventID: event.undoneEventID,
                 createdAt: event.createdAt
             )))
+        }
+        for reminder in manifest.reminders {
+            context.insert(StoredShapingReminder(
+                id: reminder.id, pieceID: reminder.pieceID,
+                instruction: reminder.instruction, intervalRaw: reminder.interval,
+                startRow: reminder.startRow, endRow: reminder.endRow,
+                createdAt: reminder.createdAt
+            ))
         }
         do {
             try commit()

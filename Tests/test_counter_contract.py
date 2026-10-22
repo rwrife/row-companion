@@ -38,7 +38,7 @@ class CounterContractTests(unittest.TestCase):
         backup = text("Backup/BackupFormat.swift")
         self.assertRegex(factory, r"schemaVersion = 7")
         self.assertIn("StoredNamedCounter.self, StoredCounterEvent.self", factory)
-        self.assertRegex(backup, r"schemaVersion = 3")
+        self.assertRegex(backup, r"schemaVersion = 7")
         self.assertIn("decodeIfPresent([CounterSnapshot]", backup)
         self.assertIn("decodeIfPresent([CounterEventSnapshot]", backup)
         self.assertIn("counter \\(", backup)
