@@ -191,6 +191,101 @@ final class BackupTests: XCTestCase {
         XCTAssertEqual(try repo.pieces(in: projectID).first?.completedRows, 1)
     }
 
+    // MARK: - Shaping reminders in backup (issue #15 data-loss gap)
+
+    func testRemindersRoundTripThroughFullBackup() throws {
+        let (repo, projectID, pieceID, _) = try makePopulatedRepository()
+        _ = try repo.addReminder(to: pieceID, instruction: "Increase every 6", interval: 6, startRow: 4, endRow: 60)
+        _ = try repo.addReminder(to: pieceID, instruction: "Begin shaping", interval: nil, startRow: 48)
+        let original = try repo.reminders(for: pieceID)
+        XCTAssertEqual(original.count, 2)
+
+        let manifest = try repo.projectSnapshot(for: projectID)
+        XCTAssertEqual(manifest.reminders.count, 2)
+        XCTAssertEqual(manifest.reminders.map(\.instruction), ["Increase every 6", "Begin shaping"])
+
+        let service = BackupService(repository: repo)
+        let backupDir = tempDir.appendingPathComponent("reminder-backup", isDirectory: true)
+        try service.exportFullBackup(for: projectID, to: backupDir)
+        let newProjectID = try service.restore(from: backupDir)
+        let newPiece = try XCTUnwrap(try repo.pieces(in: newProjectID).first)
+        XCTAssertNotEqual(newPiece.id, pieceID)
+        let restored = try repo.reminders(for: newPiece.id)
+        XCTAssertEqual(restored.map(\.instruction), original.map(\.instruction))
+        XCTAssertEqual(restored.map(\.interval), original.map(\.interval))
+        XCTAssertEqual(restored.map(\.startRow), original.map(\.startRow))
+        XCTAssertEqual(restored.map(\.endRow), original.map(\.endRow))
+        XCTAssertEqual(Set(restored.map(\.id)).isDisjoint(with: Set(original.map(\.id))), true,
+                       "restored reminders get remapped IDs")
+        // Source project keeps its own reminders untouched.
+        XCTAssertEqual(try repo.reminders(for: pieceID).count, 2)
+    }
+
+    func testRejectsReminderWithDanglingPiece() throws {
+        var manifest = baseManifest()
+        manifest.reminders = [BackupFormat.ReminderSnapshot(
+            id: UUID(), pieceID: UUID(), instruction: "Ghost", interval: nil,
+            startRow: 1, endRow: nil, createdAt: Date()
+        )]
+        XCTAssertThrowsError(try BackupFormat.validate(manifest: manifest, stagedDirectory: tempDir)) { error in
+            guard case BackupError.danglingReference(let kind, _)? = error as? BackupError else { return XCTFail("got \(error)") }
+            XCTAssertEqual(kind, "piece")
+        }
+    }
+
+    func testRejectsInvalidReminderContent() throws {
+        let pieceID = UUID()
+        var manifest = baseManifest()
+        manifest.pieces = [BackupFormat.PieceSnapshot(
+            id: pieceID, projectID: manifest.project.id, name: "p",
+            completedRows: 0, repeatLength: nil, notes: ""
+        )]
+        for bad in [
+            BackupFormat.ReminderSnapshot(id: UUID(), pieceID: pieceID, instruction: "  ", interval: nil, startRow: 1, endRow: nil, createdAt: Date()),
+            BackupFormat.ReminderSnapshot(id: UUID(), pieceID: pieceID, instruction: "ok", interval: 0, startRow: 1, endRow: nil, createdAt: Date()),
+            BackupFormat.ReminderSnapshot(id: UUID(), pieceID: pieceID, instruction: "ok", interval: nil, startRow: 0, endRow: nil, createdAt: Date()),
+            BackupFormat.ReminderSnapshot(id: UUID(), pieceID: pieceID, instruction: "ok", interval: 6, startRow: 10, endRow: 5, createdAt: Date()),
+        ] {
+            manifest.reminders = [bad]
+            XCTAssertThrowsError(try BackupFormat.validate(manifest: manifest, stagedDirectory: tempDir)) { error in
+                guard case BackupError.invalidCountOrHistory? = error as? BackupError else { return XCTFail("got \(error)") }
+            }
+        }
+    }
+
+    func testRejectsDuplicateReminderIDs() throws {
+        let pieceID = UUID()
+        let shared = UUID()
+        var manifest = baseManifest()
+        manifest.pieces = [BackupFormat.PieceSnapshot(
+            id: pieceID, projectID: manifest.project.id, name: "p",
+            completedRows: 0, repeatLength: nil, notes: ""
+        )]
+        manifest.reminders = [
+            BackupFormat.ReminderSnapshot(id: shared, pieceID: pieceID, instruction: "a", interval: nil, startRow: 1, endRow: nil, createdAt: Date()),
+            BackupFormat.ReminderSnapshot(id: shared, pieceID: pieceID, instruction: "b", interval: nil, startRow: 2, endRow: nil, createdAt: Date()),
+        ]
+        XCTAssertThrowsError(try BackupFormat.validate(manifest: manifest, stagedDirectory: tempDir)) { error in
+            guard case BackupError.duplicateID(let kind, _)? = error as? BackupError else { return XCTFail("got \(error)") }
+            XCTAssertEqual(kind, "shaping reminder")
+        }
+    }
+
+    func testRemindersKeyDecodingAcrossSchemaVersions() throws {
+        // Pre-v7 manifests never carried the key; decode must stay tolerant.
+        let legacy = baseManifest()
+        var json = try XCTUnwrap(JSONSerialization.jsonObject(with: encode(legacy)) as? [String: Any])
+        json.removeValue(forKey: "reminders")
+        json["schemaVersion"] = 3
+        let data = try JSONSerialization.data(withJSONObject: json)
+        let decoded = try decode(data)
+        XCTAssertTrue(decoded.reminders.isEmpty)
+        XCTAssertEqual(decoded.schemaVersion, 3)
+        json["schemaVersion"] = BackupFormat.schemaVersion
+        XCTAssertThrowsError(try decode(JSONSerialization.data(withJSONObject: json)),
+                             "v7+ must not silently drop reminders when the key is absent")
+    }
+
     // MARK: - Hostile archive rejection
 
     func testRejectsFutureSchemaVersion() throws {

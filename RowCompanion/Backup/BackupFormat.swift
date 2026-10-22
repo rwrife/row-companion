@@ -82,8 +82,9 @@ public enum BackupError: Error, Equatable, Sendable {
 public enum BackupFormat {
     /// Manifest schema version written into every snapshot.
     /// v2 adds `checkpoints` (issue #18). v3 adds `counters` and
-    /// `counterEvents` (issue #16); older manifests decode as empty.
-    public static let schemaVersion = 3
+    /// `counterEvents` (issue #16); v7 adds shaping reminders after the
+    /// reserved v4 annotations, v5 details, and v6 photos schemas.
+    public static let schemaVersion = 7
     /// Restores refuse manifests stamped by a future schema (fail closed).
     public static let minimumSupportedVersion = 1
     /// Combined file-size cap for a staged restore (PLAN.md: 200 MiB).
@@ -177,6 +178,17 @@ public enum BackupFormat {
         public var createdAt: Date
     }
 
+    public struct ReminderSnapshot: Codable, Equatable, Sendable {
+        public var id: UUID
+        public var pieceID: UUID
+        public var instruction: String
+        public var interval: Int?
+        public var startRow: Int
+        public var endRow: Int?
+        /// Reminder lists order by createdAt; a restore must preserve it.
+        public var createdAt: Date
+    }
+
     /// The versioned manifest written at export time.
     public struct Manifest: Codable, Equatable, Sendable {
         public var schemaVersion: Int
@@ -190,15 +202,17 @@ public enum BackupFormat {
         public var checkpoints: [CheckpointSnapshot]
         public var counters: [CounterSnapshot]
         public var counterEvents: [CounterEventSnapshot]
+        public var reminders: [ReminderSnapshot]
 
         enum CodingKeys: String, CodingKey {
             case schemaVersion, createdAt, includesOriginals, project, pieces, events, documents, references, checkpoints
-            case counters, counterEvents
+            case counters, counterEvents, reminders
         }
 
         public init(from decoder: Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
-            schemaVersion = try container.decode(Int.self, forKey: .schemaVersion)
+            let stampedVersion = try container.decode(Int.self, forKey: .schemaVersion)
+            schemaVersion = stampedVersion
             createdAt = try container.decode(Date.self, forKey: .createdAt)
             includesOriginals = try container.decode(Bool.self, forKey: .includesOriginals)
             project = try container.decode(ProjectSnapshot.self, forKey: .project)
@@ -209,6 +223,9 @@ public enum BackupFormat {
             checkpoints = try container.decodeIfPresent([CheckpointSnapshot].self, forKey: .checkpoints) ?? []
             counters = try container.decodeIfPresent([CounterSnapshot].self, forKey: .counters) ?? []
             counterEvents = try container.decodeIfPresent([CounterEventSnapshot].self, forKey: .counterEvents) ?? []
+            reminders = stampedVersion >= 7
+                ? try container.decode([ReminderSnapshot].self, forKey: .reminders)
+                : try container.decodeIfPresent([ReminderSnapshot].self, forKey: .reminders) ?? [] // ponytail: accept old optional fields; reject missing v7 payload.
         }
 
         public init(
@@ -222,7 +239,8 @@ public enum BackupFormat {
             references: [ReferenceSnapshot],
             checkpoints: [CheckpointSnapshot] = [],
             counters: [CounterSnapshot] = [],
-            counterEvents: [CounterEventSnapshot] = []
+            counterEvents: [CounterEventSnapshot] = [],
+            reminders: [ReminderSnapshot] = []
         ) {
             self.schemaVersion = schemaVersion
             self.createdAt = createdAt
@@ -235,6 +253,7 @@ public enum BackupFormat {
             self.checkpoints = checkpoints
             self.counters = counters
             self.counterEvents = counterEvents
+            self.reminders = reminders
         }
     }
 
@@ -313,6 +332,10 @@ public enum BackupFormat {
         for checkpoint in manifest.checkpoints where !seenCheckpointIDs.insert(checkpoint.id).inserted {
             throw BackupError.duplicateID(kind: "checkpoint", id: checkpoint.id.uuidString)
         }
+        var seenReminderIDs: Set<UUID> = []
+        for reminder in manifest.reminders where !seenReminderIDs.insert(reminder.id).inserted {
+            throw BackupError.duplicateID(kind: "shaping reminder", id: reminder.id.uuidString)
+        }
 
         // --- Project + reference integrity ---------------------------------
         for piece in manifest.pieces where piece.projectID != manifest.project.id {
@@ -351,6 +374,23 @@ public enum BackupFormat {
                 throw BackupError.invalidCountOrHistory(detail: "invalid checkpoint")
             }
             checkpointNames[checkpoint.pieceID, default: []].append(checkpoint.name.trimmingCharacters(in: .whitespacesAndNewlines))
+        }
+
+        // --- Shaping reminders (issue #15, backup schema v7) ----------------
+        for reminder in manifest.reminders {
+            guard seenPieceIDs.contains(reminder.pieceID) else {
+                throw BackupError.danglingReference(kind: "piece", id: reminder.pieceID.uuidString)
+            }
+            // Re-run the exact authoring rules on the snapshot, so a
+            // hand-edited manifest cannot persist a reminder the UI would
+            // have refused (same fail-closed posture as checkpoints).
+            let problems = ReminderRules.validationProblems(for: ShapingReminderRecord(
+                id: reminder.id, pieceID: reminder.pieceID, instruction: reminder.instruction,
+                interval: reminder.interval, startRow: reminder.startRow, endRow: reminder.endRow
+            ))
+            guard problems.isEmpty else {
+                throw BackupError.invalidCountOrHistory(detail: "invalid reminder")
+            }
         }
 
         // --- Named counters (issue #16) -------------------------------------
@@ -654,6 +694,14 @@ public enum BackupFormat {
                 createdAt: event.createdAt
             )
         }
+        let reminders = manifest.reminders.map { reminder in
+            ReminderSnapshot(
+                id: mapped(reminder.id), pieceID: mapped(reminder.pieceID),
+                instruction: reminder.instruction, interval: reminder.interval,
+                startRow: reminder.startRow, endRow: reminder.endRow,
+                createdAt: reminder.createdAt
+            )
+        }
         let bytes = Dictionary(uniqueKeysWithValues: validated.documentBytes.map { (mapped($0.key), $0.value) })
         return ProjectSnapshotBundle(
             manifest: Manifest(
@@ -667,7 +715,8 @@ public enum BackupFormat {
                 references: references,
                 checkpoints: checkpoints,
                 counters: counters,
-                counterEvents: counterEvents
+                counterEvents: counterEvents,
+                reminders: reminders
             ),
             documentBytes: bytes
         )

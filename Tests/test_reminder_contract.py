@@ -69,6 +69,15 @@ class ReminderContractTests(unittest.TestCase):
         self.assertIn('storedReminders(pieceIDs:', backup)
         self.assertIn('for object in reminders { context.delete(object) }', backup)
 
+    def test_backup_format_and_restore_round_trip_reminders(self):
+        fmt = (APP / 'Backup' / 'BackupFormat.swift').read_text()
+        repo = (APP / 'Backup' / 'BackupRepository.swift').read_text()
+        self.assertIn('struct ReminderSnapshot', fmt)
+        self.assertIn('public var reminders: [ReminderSnapshot]', fmt)
+        self.assertIn('duplicateID(kind: "shaping reminder"', fmt)
+        self.assertIn('StoredShapingReminder(', repo)
+        self.assertIn('reminders.append(BackupFormat.ReminderSnapshot(', repo)
+
     def test_reminders_migrate_with_store_version(self):
         factory = (APP / 'Persistence' / 'RowStoreFactory.swift').read_text()
         self.assertIn('StoredShapingReminder.self', factory)

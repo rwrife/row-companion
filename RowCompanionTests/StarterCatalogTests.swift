@@ -133,6 +133,29 @@ final class StarterProjectTests: XCTestCase {
         XCTAssertEqual(relaunchPieces.count, pieces.count)
     }
 
+    func testBundledPatternProjectBackupRestoreKeepsReminders() throws {
+        let repo = try RowRepository(storeURL: storeURL)
+        let pattern = try XCTUnwrap(StarterCatalog.patterns.first { $0.id == "single-crochet-scarf" })
+        let projectID = try repo.startStarterPattern(pattern)
+        let originalPiece = try XCTUnwrap(try repo.pieces(in: projectID).first)
+        let before = try repo.reminders(for: originalPiece.id)
+        XCTAssertEqual(before.count, 1)
+
+        let service = BackupService(repository: repo)
+        let directory = tempDir.appendingPathComponent("starter-backup", isDirectory: true)
+        try service.exportFullBackup(for: projectID, to: directory)
+        let restoredID = try service.restore(from: directory)
+        let restoredPiece = try XCTUnwrap(try repo.pieces(in: restoredID).first)
+        XCTAssertEqual(restoredPiece.notes, originalPiece.notes)
+        XCTAssertEqual(restoredPiece.repeatLength, originalPiece.repeatLength)
+        let after = try repo.reminders(for: restoredPiece.id)
+        XCTAssertEqual(after.map(\.instruction), before.map(\.instruction))
+        XCTAssertEqual(after.map(\.startRow), before.map(\.startRow))
+        XCTAssertEqual(after.map(\.endRow), before.map(\.endRow))
+        XCTAssertNotEqual(after.first?.id, before.first?.id)
+        XCTAssertEqual(try repo.reminders(for: originalPiece.id).count, 1)
+    }
+
     func testInvalidPatternNeverReachesDisk() throws {
         let repo = try RowRepository(storeURL: storeURL)
         // Build a deliberately invalid pattern (no pieces).
