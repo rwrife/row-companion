@@ -80,6 +80,13 @@ class DocumentImportContractTests(unittest.TestCase):
         self.assertIn('workspace.title', app_text)
         self.assertIn('workspace.status', app_text)
 
+    def test_import_tests_cover_zero_page_and_page_limit_and_retry(self):
+        tests_text = (ROOT / 'RowCompanionTests' / 'PDFImportTests.swift').read_text()
+        self.assertIn('testRejectsDocumentAbovePageLimitWithoutLeavingBytes', tests_text)
+        self.assertIn('testRejectedZeroPageOrUnreadableDocumentLeavesNoBytes', tests_text)
+        self.assertIn('testImportRetryAfterInjectedStorageFailureKeepsOnlySuccessfulDocument', tests_text)
+        self.assertIn('testPickerCancellationHasNoRepositoryPath', tests_text)
+
 
 if __name__ == '__main__':
     unittest.main()

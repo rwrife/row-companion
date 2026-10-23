@@ -101,6 +101,62 @@ final class PDFImportTests: XCTestCase {
         }
     }
 
+    func testRejectsDocumentAbovePageLimitWithoutLeavingBytes() throws {
+        let source = try writePDF(pages: PDFImport.maximumPages + 1)
+        XCTAssertThrowsError(try PDFImport.performImport(sourceURL: source, storeURL: storeURL)) { error in
+            guard case PDFImportError.tooManyPages(let count)? = error as? PDFImportError else {
+                return XCTFail("expected tooManyPages, got \(error)")
+            }
+            XCTAssertEqual(count, PDFImport.maximumPages + 1)
+        }
+        let directory = PDFImport.documentsDirectory(storeURL: storeURL)
+        XCTAssertTrue(((try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? []).isEmpty)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: source.path), "import never deletes user source")
+    }
+
+    func testRejectedZeroPageOrUnreadableDocumentLeavesNoBytes() throws {
+        let source = try writePDF(pages: 0)
+        XCTAssertThrowsError(try PDFImport.performImport(sourceURL: source, storeURL: storeURL)) { error in
+            guard let failure = error as? PDFImportError,
+                  failure == .zeroPageDocument || failure == .notAValidPDF else {
+                return XCTFail("expected zeroPageDocument or notAValidPDF, got \(error)")
+            }
+        }
+        let directory = PDFImport.documentsDirectory(storeURL: storeURL)
+        XCTAssertTrue(((try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? []).isEmpty)
+    }
+
+    func testImportRetryAfterInjectedStorageFailureKeepsOnlySuccessfulDocument() throws {
+        let repo = try RowRepository(storeURL: storeURL)
+        let project = try repo.createProject(title: "Retry")
+        let source = try writePDF(pages: 2)
+        PDFImport.testHookBeforeFinalMove = { throw CocoaError(.fileWriteOutOfSpace) }
+        XCTAssertThrowsError(try repo.importPatternDocument(from: source, for: project.id)) { error in
+            guard case PDFImportError.storageFailure? = error as? PDFImportError else {
+                return XCTFail("expected storageFailure, got \(error)")
+            }
+        }
+        XCTAssertTrue(try repo.documents(in: project.id).isEmpty)
+        let directory = PDFImport.documentsDirectory(storeURL: storeURL)
+        XCTAssertTrue(((try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? []).isEmpty)
+
+        PDFImport.testHookBeforeFinalMove = nil
+        let record = try repo.importPatternDocument(from: source, for: project.id)
+        XCTAssertEqual(try repo.documents(in: project.id).map(\.id), [record.id])
+        XCTAssertEqual(try RowRepository.open(storeURL: storeURL).documents(in: project.id).map(\.id), [record.id])
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: directory.path), ["\(record.id.uuidString).pdf"])
+        XCTAssertTrue(FileManager.default.fileExists(atPath: source.path))
+    }
+
+    func testPickerCancellationHasNoRepositoryPath() throws {
+        let repo = try RowRepository(storeURL: storeURL)
+        let project = try repo.createProject(title: "No selection")
+        // No URL is handed to importPatternDocument on cancellation; assert
+        // baseline state before any picker callback, without simulating UIKit.
+        XCTAssertTrue(try repo.documents(in: project.id).isEmpty)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: PDFImport.documentsDirectory(storeURL: storeURL).path))
+    }
+
     func testClassifiesEncryptedBytesAsPasswordProtected() throws {
         // Fail-closed classification for PDFKit-refused bytes.
         let encrypted = Data("%PDF-1.7\n<< /Encrypt 5 0 R >>\ntrailer".utf8)
