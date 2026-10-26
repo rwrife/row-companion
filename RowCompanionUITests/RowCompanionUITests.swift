@@ -389,6 +389,54 @@ final class RowCompanionUITests: XCTestCase {
         XCTAssertTrue(fullButton.waitForExistence(timeout: 5))
         XCTAssertTrue(fullButton.isEnabled, "both acknowledgements enable the full backup")
     }
+
+    /// Issue #6: cancel the real system Files picker by leaving the app
+    /// while it is presented, then verify that nothing was staged, the
+    /// workspace stays on the no-pattern placeholder, and the durable count
+    /// survives relaunch with the import control still available for retry.
+    /// Provider-specific in-picker cancellation remains a physical-device
+    /// gate; this journey proves the app-side no-callback contract.
+    func testCancelPatternPickerKeepsProjectAndAllowsRetry() {
+        createProject("Picker Scarf", piece: "Body", repeatLength: "8")
+        XCTAssertTrue(app.staticTexts["No pattern attached"].waitForExistence(timeout: 5))
+
+        // Open the real system file importer, then quit the app while it is
+        // up: the completion handler never fires, so no import may run.
+        app.buttons["menu.add"].tap()
+        let importButton = app.buttons["menu.importPDF"]
+        XCTAssertTrue(importButton.waitForExistence(timeout: 5))
+        XCTAssertTrue(importButton.isEnabled,
+                      "import must be available with a project selected")
+        importButton.tap()
+        app.terminate()
+
+        // Relaunch on the same durable store (no reset flag).
+        app.launchArguments = []
+        app.launch()
+        XCTAssertTrue(app.staticTexts["workspace.title"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.staticTexts["No pattern attached"].exists,
+                      "a cancelled picker must not attach any document")
+        let completed = app.staticTexts["row.completed"]
+        XCTAssertTrue(completed.waitForExistence(timeout: 5))
+        XCTAssertTrue(completed.label.contains("0"),
+                      "cancelling the picker must not change the count, got \(completed.label)")
+
+        // Row work still functions normally afterwards.
+        let complete = app.buttons["control.completeRow"]
+        XCTAssertTrue(complete.waitForExistence(timeout: 5))
+        complete.tap()
+        XCTAssertTrue(completed.label.contains("1"), completed.label)
+
+        // ... and the count is durable, with import still offered for retry.
+        app.terminate()
+        app.launch()
+        XCTAssertTrue(app.staticTexts["row.completed"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.staticTexts["row.completed"].label.contains("1"))
+        XCTAssertTrue(app.staticTexts["No pattern attached"].exists)
+        app.buttons["menu.add"].tap()
+        XCTAssertTrue(app.buttons["menu.importPDF"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["menu.importPDF"].isEnabled)
+    }
 }
 
 extension RowCompanionUITests {
