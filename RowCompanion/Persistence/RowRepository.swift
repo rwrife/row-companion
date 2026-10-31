@@ -445,10 +445,18 @@ extension RowRepository {
             }
             let now = Date()
             context.insert(StoredProject(id: newID, title: title, createdAt: now, updatedAt: now))
+            let projectDetails = try details(forProject: id)
+            if !projectDetails.isEmpty {
+                context.insert(StoredProjectDetails(ownerID: newID, isPieceOverride: false, details: projectDetails))
+            }
             for piece in try pieces(in: id) {
                 let pieceID = UUID()
                 context.insert(StoredPiece(id: pieceID, projectID: newID, name: piece.name,
                     completedRows: copyProgress ? piece.completedRows : 0, repeatLength: piece.repeatLength, notes: piece.notes))
+                let pieceDetails = try details(forPiece: piece.id)
+                if !pieceDetails.isEmpty {
+                    context.insert(StoredProjectDetails(ownerID: pieceID, isPieceOverride: true, details: pieceDetails))
+                }
                 for reminder in try reminders(for: piece.id) {
                     context.insert(StoredShapingReminder(id: UUID(), pieceID: pieceID, instruction: reminder.instruction,
                         intervalRaw: reminder.interval, startRow: reminder.startRow, endRow: reminder.endRow, createdAt: now))

@@ -89,6 +89,11 @@ extension RowRepository {
             }
         }
         let documents = try self.documents(in: projectID)
+        var detailOwners: Set<UUID> = [projectID]
+        detailOwners.formUnion(pieces.map(\.id))
+        let details: [BackupFormat.DetailsSnapshot] = try storedDetails(ownerIDs: detailOwners).map {
+            BackupFormat.DetailsSnapshot(ownerID: $0.ownerID, isPieceOverride: $0.isPieceOverride, value: $0.record)
+        }.sorted { $0.ownerID.uuidString < $1.ownerID.uuidString }
         let documentSnapshots: [BackupFormat.DocumentSnapshot] = documents.map { doc in
             // The recorded size is the size of the app-owned copy at export
             // time; a vanished file records 0 and therefore fails validation
@@ -121,7 +126,8 @@ extension RowRepository {
             references: references,
             checkpoints: checkpoints,
             counters: counters,
-            counterEvents: counterEvents
+            counterEvents: counterEvents,
+            details: details
         )
     }
 
@@ -201,6 +207,9 @@ extension RowRepository {
                 createdAt: event.createdAt
             )))
         }
+        for entry in manifest.details {
+            context.insert(StoredProjectDetails(ownerID: entry.ownerID, isPieceOverride: entry.isPieceOverride, details: entry.value))
+        }
         do {
             try commit()
         } catch {
@@ -260,6 +269,9 @@ extension RowRepository {
         let counterEvents = try context.fetch(FetchDescriptor<StoredCounterEvent>(predicate: #Predicate { counterIDs.contains($0.counterID) }))
         let libraryID = projectID
         let libraryEntries = try context.fetch(FetchDescriptor<StoredLibraryEntry>(predicate: #Predicate { $0.projectID == libraryID }))
+        var detailOwnerIDs = pieceIDs
+        detailOwnerIDs.insert(projectID)
+        let detailRows = try storedDetails(ownerIDs: detailOwnerIDs)
         for object in events { context.delete(object) }
         for object in references { context.delete(object) }
         for object in reminders { context.delete(object) }
@@ -267,6 +279,7 @@ extension RowRepository {
         for object in counterEvents { context.delete(object) }
         for object in counters { context.delete(object) }
         for object in documents { context.delete(object) }
+        for object in detailRows { context.delete(object) }
         for object in pieces { context.delete(object) }
         for entry in libraryEntries { context.delete(entry) }
         context.delete(project)
