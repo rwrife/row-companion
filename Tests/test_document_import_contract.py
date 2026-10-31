@@ -68,6 +68,13 @@ class DocumentImportContractTests(unittest.TestCase):
         self.assertNotIn('openURL', text)
         self.assertIn('never installs link/URL handling', ' '.join(text.split()))
 
+    def test_picker_cancellation_journey_reopens_without_import(self):
+        smoke = (ROOT / 'RowCompanionUITests' / 'RowCompanionUITests.swift').read_text()
+        self.assertIn('func testCancelPatternPickerKeepsProjectAndAllowsRetry()', smoke)
+        self.assertIn('menu.importPDF', smoke)
+        self.assertIn('No pattern attached', smoke)
+        self.assertIn('app.launchArguments = []', smoke)
+
     def test_ui_test_journey_targets_workspace_controls(self):
         smoke = (ROOT / 'RowCompanionUITests' / 'RowCompanionUITests.swift').read_text()
         for identifier in ('control.completeRow', 'control.undo', 'row.completed',
