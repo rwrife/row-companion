@@ -46,6 +46,30 @@ final class PDFImportTests: XCTestCase {
         return url
     }
 
+    /// Hand-built PDF with a valid, empty page tree. Core Graphics silently
+    /// creates one page when closed without beginPage, so it cannot test this.
+    private func writeEmptyPageTreePDF() throws -> URL {
+        let objects = [
+            "<< /Type /Catalog /Pages 2 0 R >>",
+            "<< /Type /Pages /Kids [] /Count 0 >>"
+        ]
+        var bytes = Data("%PDF-1.4\n".utf8)
+        var offsets = [0]
+        for (index, object) in objects.enumerated() {
+            offsets.append(bytes.count)
+            bytes.append(Data("\(index + 1) 0 obj\n\(object)\nendobj\n".utf8))
+        }
+        let xref = bytes.count
+        bytes.append(Data("xref\n0 3\n0000000000 65535 f \n".utf8))
+        for offset in offsets.dropFirst() {
+            bytes.append(Data(String(format: "%010d 00000 n \n", offset).utf8))
+        }
+        bytes.append(Data("trailer\n<< /Size 3 /Root 1 0 R >>\nstartxref\n\(xref)\n%%EOF\n".utf8))
+        let url = tempDir.appendingPathComponent("empty-page-tree.pdf")
+        try bytes.write(to: url)
+        return url
+    }
+
     // MARK: - Accepting valid documents
 
     func testAcceptsGeneratedMultiPagePDF() throws {
@@ -147,11 +171,42 @@ final class PDFImportTests: XCTestCase {
 
     func testGeneratedZeroPageFixtureActuallyYieldsOnePage() throws {
         // Evidence record: a CGContext closed without beginPage still emits a
-        // page, so the generated-fixture helper cannot build a zero-page PDF;
-        // the importer's zeroPageDocument guard stays unit-untestable on iOS.
+        // page; the separate empty-tree fixture tests rejection.
         let source = try writePDF(pages: 0)
         let document = try XCTUnwrap(PDFDocument(url: source))
         XCTAssertEqual(document.pageCount, 1)
+    }
+
+    /// Issue #6: empty /Pages tree has zero declared pages, unlike a
+    /// CGContext closed without beginPage (which silently emits one page).
+    /// PDFKit may refuse such a PDF rather than construct a zero-page object;
+    /// in either case, the importer must reject it without staging bytes.
+    /// ponytail: test the zeroPageDocument branch only when a PDFKit-openable
+    /// zero-page fixture is found; refusal still proves fail-closed behavior.
+    func testRejectsZeroPageDocumentWithoutLeavingBytes() throws {
+        let source = try writeEmptyPageTreePDF()
+        XCTAssertThrowsError(try PDFImport.performImport(sourceURL: source, storeURL: storeURL)) { error in
+            guard let importError = error as? PDFImportError else {
+                return XCTFail("expected PDFImportError, got \(error)")
+            }
+            XCTAssertTrue(importError == .zeroPageDocument || importError == .notAValidPDF,
+                          "zero-page document must reject fail-closed, got \(importError)")
+        }
+        let dir = PDFImport.documentsDirectory(storeURL: storeURL)
+        let leftovers = (try? FileManager.default.contentsOfDirectory(atPath: dir.path)) ?? []
+        XCTAssertTrue(leftovers.isEmpty, "rejected zero-page import must leave no files: \(leftovers)")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: source.path),
+                      "rejection must not touch the user's source file")
+    }
+
+    func testRepositoryRejectsZeroPageDocumentWithoutRecord() throws {
+        let repo = try RowRepository(storeURL: storeURL)
+        let project = try repo.createProject(title: "Empty")
+        let source = try writeEmptyPageTreePDF()
+        XCTAssertThrowsError(try repo.importPatternDocument(from: source, for: project.id))
+        XCTAssertTrue(try repo.documents(in: project.id).isEmpty)
+        let relaunched = try RowRepository.open(storeURL: storeURL)
+        XCTAssertTrue(try relaunched.documents(in: project.id).isEmpty)
     }
 
     func testClassifiesEncryptedBytesAsPasswordProtected() throws {

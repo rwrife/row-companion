@@ -280,7 +280,7 @@ final class ProjectLibraryTests: XCTestCase {
             let reopened = try RowRepository.open(storeURL: url)
             XCTAssertEqual(try reopened.librarySummaries().first?.status, .archived)
             let context = ModelContext(reopened.container)
-            XCTAssertEqual(try context.fetch(FetchDescriptor<StoredStoreInfo>()).first?.schemaVersion, 7)
+            XCTAssertEqual(try context.fetch(FetchDescriptor<StoredStoreInfo>()).first?.schemaVersion, RowStoreFactory.schemaVersion)
             try reopened.deleteProject(id, confirmed: true)
             XCTAssertTrue(try context.fetch(FetchDescriptor<StoredLibraryEntry>()).isEmpty)
         }

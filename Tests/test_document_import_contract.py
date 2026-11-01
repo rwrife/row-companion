@@ -89,5 +89,17 @@ class DocumentImportContractTests(unittest.TestCase):
         self.assertIn('testGeneratedZeroPageFixtureActuallyYieldsOnePage', tests_text)
 
 
+    def test_import_tests_cover_zero_page_rejection(self):
+        tests_text = (ROOT / 'RowCompanionTests' / 'PDFImportTests.swift').read_text()
+        # A hand-built empty /Pages tree fixture exists (Core Graphics cannot
+        # produce a zero-page file) and both the importer and the repository
+        # assert rejection with no staged bytes and no durable record.
+        self.assertIn('writeEmptyPageTreePDF', tests_text)
+        self.assertIn('testRejectsZeroPageDocumentWithoutLeavingBytes', tests_text)
+        self.assertIn('testRepositoryRejectsZeroPageDocumentWithoutRecord', tests_text)
+        for needle in ('/Type /Pages /Kids [] /Count 0',):
+            self.assertIn(needle, tests_text)
+
+
 if __name__ == '__main__':
     unittest.main()
