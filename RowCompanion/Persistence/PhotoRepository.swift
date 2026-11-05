@@ -176,7 +176,7 @@ extension RowRepository {
         let descriptor = FetchDescriptor<StoredProgressPhoto>(predicate: #Predicate { $0.id == id })
         guard let photo = try context.fetch(descriptor).first else { throw PhotoError.photoNotFound(photoID) }
         let dir = photosDirectoryURL()
-        let dirDescriptor = open(dir.path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW)
+        let dirDescriptor = Darwin.open(dir.path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW)
         guard dirDescriptor >= 0 else { throw PhotoError.unreadablePhoto }
         defer { close(dirDescriptor) }
         let leaf = photo.relativePath.components(separatedBy: "/").last ?? photo.relativePath
