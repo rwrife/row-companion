@@ -2,6 +2,7 @@ import Foundation
 import SwiftData
 import CryptoKit
 import UIKit
+import Darwin
 
 /// Additive photo storage for issue #20 (progress photos).
 /// Kept local-first, zero-cloud, app-owned, and bounded:
@@ -174,11 +175,36 @@ extension RowRepository {
         let id = photoID
         let descriptor = FetchDescriptor<StoredProgressPhoto>(predicate: #Predicate { $0.id == id })
         guard let photo = try context.fetch(descriptor).first else { throw PhotoError.photoNotFound(photoID) }
-        let url = photoFileURL(photo.relativePath)
-        guard let data = try? Data(contentsOf: url), data.count == photo.fileSize,
-              SHA256.hash(data: data).map({ String(format: "%02x", $0) }).joined() == photo.sha256 else {
+        let dir = photosDirectoryURL()
+        let dirDescriptor = open(dir.path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW)
+        guard dirDescriptor >= 0 else { throw PhotoError.unreadablePhoto }
+        defer { close(dirDescriptor) }
+        let leaf = photo.relativePath.components(separatedBy: "/").last ?? photo.relativePath
+        guard photo.relativePath == "RowCompanionPhotos/\(leaf)",
+              leaf.hasSuffix(".jpg"),
+              UUID(uuidString: String(leaf.dropLast(4))) != nil else {
             throw PhotoError.unreadablePhoto
         }
+        let fd = openat(dirDescriptor, leaf, O_RDONLY | O_NOFOLLOW | O_NONBLOCK)
+        guard fd >= 0 else { throw PhotoError.unreadablePhoto }
+        let handle = FileHandle(fileDescriptor: fd, closeOnDealloc: true)
+        defer { try? handle.close() }
+        var info = stat()
+        guard fstat(fd, &info) == 0, (info.st_mode & S_IFMT) == S_IFREG else {
+            throw PhotoError.unreadablePhoto
+        }
+        guard info.st_size <= PhotoRepository.maximumPhotoBytes else {
+            throw PhotoError.oversizedPhoto(byteCount: Int(clamping: info.st_size))
+        }
+        var data = Data()
+        while data.count <= PhotoRepository.maximumPhotoBytes {
+            let chunk = try handle.read(upToCount: min(64 * 1024, PhotoRepository.maximumPhotoBytes + 1 - data.count)) ?? Data()
+            if chunk.isEmpty { break }
+            data.append(chunk)
+        }
+        guard data.count == photo.fileSize else { throw PhotoError.unreadablePhoto }
+        let hex = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+        guard hex == photo.sha256 else { throw PhotoError.unreadablePhoto }
         return data
     }
 

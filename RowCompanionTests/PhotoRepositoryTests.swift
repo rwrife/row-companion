@@ -105,6 +105,31 @@ final class PhotoRepositoryTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: repo.photoFileURL(try XCTUnwrap(restoredPhotos.first).relativePath).path))
     }
 
+    func testPhotoFileBytesRejectsOversizedReplacementAndSymlink() throws {
+        let url = try temporaryStoreURL()
+        defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+        let repo = try RowRepository(storeURL: url)
+        let project = try repo.createProject(title: "Bounded media").id
+        let attached = try repo.attachPhoto(data: sampleJPEGData(), description: "Swatch", ownerID: project)
+        let owned = repo.photoFileURL(attached.relativePath)
+        let external = url.deletingLastPathComponent().appendingPathComponent("outside.jpg")
+        try FileManager.default.removeItem(at: owned)
+        FileManager.default.createFile(atPath: owned.path, contents: nil)
+        let handle = try FileHandle(forWritingTo: owned)
+        try handle.truncate(atOffset: UInt64(PhotoRepository.maximumPhotoBytes + 1))
+        try handle.close()
+        XCTAssertThrowsError(try repo.photoFileBytes(attached.id)) { error in
+            guard case PhotoError.oversizedPhoto = error else { return XCTFail("expected oversizedPhoto, got \(error)") }
+        }
+        try FileManager.default.removeItem(at: owned)
+        try sampleJPEGData().write(to: external)
+        try FileManager.default.createSymbolicLink(at: owned, withDestinationURL: external)
+        XCTAssertThrowsError(try repo.photoFileBytes(attached.id)) { error in
+            guard case PhotoError.unreadablePhoto = error else { return XCTFail("expected unreadablePhoto, got \(error)") }
+        }
+        XCTAssertTrue(FileManager.default.fileExists(atPath: external.path))
+    }
+
     func testMissingPhotoRefusesFullExport() throws {
         let url = try temporaryStoreURL()
         defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
