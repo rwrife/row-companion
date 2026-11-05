@@ -444,6 +444,24 @@ extension RowRepository {
                     relativePath: "RowCompanionImported/" + filename, sha256: document.sha256, pageCount: document.pageCount))
             }
             let now = Date()
+            // Photos are progress, not setup. Only copy when the user
+            // explicitly duplicates progress; each copy owns fresh bytes.
+            if copyProgress {
+                for photo in try photos(forOwner: id) {
+                    let bytes = try photoFileBytes(photo.id)
+                    let newPhotoID = UUID()
+                    let relativePath = "RowCompanionPhotos/\(newPhotoID.uuidString).jpg"
+                    let url = photoFileURL(relativePath)
+                    try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+                    copiedFiles.append(url)
+                    try bytes.write(to: url, options: .withoutOverwriting)
+                    context.insert(StoredProgressPhoto(
+                        id: newPhotoID, ownerID: newID, relativePath: relativePath,
+                        photoDescription: photo.photoDescription, sha256: photo.sha256,
+                        fileSize: photo.fileSize, createdAt: photo.createdAt
+                    ))
+                }
+            }
             context.insert(StoredProject(id: newID, title: title, createdAt: now, updatedAt: now))
             let projectDetails = try details(forProject: id)
             if !projectDetails.isEmpty {

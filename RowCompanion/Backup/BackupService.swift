@@ -51,7 +51,7 @@ public final class BackupService {
             "It contains your project name, piece names, notes, counts, and history — keep it out of shared folders if that would expose private material.",
         ]
         if includingOriginals {
-            messages.append("This backup will include copies of your imported pattern PDFs. Patterns are usually copyrighted and private: you are responsible for having the right to keep and share those copies.")
+            messages.append("This backup will include copies of your imported pattern PDFs and any attached progress photos. Patterns and photos may be private or copyrighted: you are responsible for having the right to keep and share those copies.")
         }
         return messages
     }
@@ -76,7 +76,9 @@ public final class BackupService {
     /// it via a file exporter. Throws `BackupError.exportFailed` when a
     /// referenced pattern file is unreadable (no incomplete backup emitted).
     public func exportProgress(for projectID: UUID) throws -> Data {
-        let manifest = try repository.projectSnapshot(for: projectID)
+        var manifest = try repository.projectSnapshot(for: projectID)
+        // Progress export contains metadata only; photo bytes stay private.
+        manifest.photos = []
         // Even the progress export validates the metadata it writes, so a
         // corrupt store state can never be laundered into a "backup".
         let probe = BackupFormat.ValidatedRestore(manifest: manifest, documentBytes: [:])
@@ -111,6 +113,16 @@ public final class BackupService {
             }
             payloads.append((document, bytes))
         }
+        // Explicitly selected progress photos are part of the full backup
+        // (issue #20). A missing photo means the backup would be incomplete:
+        // refuse rather than emit a manifest with phantom media.
+        var photoPayloads: [(BackupFormat.PhotoSnapshot, Data)] = []
+        for photo in manifest.photos {
+            guard let bytes = try? repository.photoFileBytes(photo.id) else {
+                throw BackupError.exportFailed(underlying: "stored photo \(photo.id.uuidString.prefix(8))… is unreadable")
+            }
+            photoPayloads.append((photo, bytes))
+        }
         if let hook = Self.testHookBeforeManifestWrite {
             do { try hook() } catch {
                 throw BackupError.exportFailed(underlying: String(describing: error))
@@ -129,6 +141,14 @@ public final class BackupService {
                 let leaf = document.relativePath.components(separatedBy: "/").last ?? document.relativePath
                 let url = destinationDirectory
                     .appendingPathComponent(BackupFormat.originalsDirectoryName, isDirectory: true)
+                    .appendingPathComponent(leaf, isDirectory: false)
+                try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+                try bytes.write(to: url)
+            }
+            for (photo, bytes) in photoPayloads {
+                let leaf = photo.relativePath.components(separatedBy: "/").last ?? photo.relativePath
+                let url = destinationDirectory
+                    .appendingPathComponent(BackupFormat.photosDirectoryName, isDirectory: true)
                     .appendingPathComponent(leaf, isDirectory: false)
                 try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
                 try bytes.write(to: url)
@@ -298,7 +318,7 @@ public final class BackupService {
     /// Restore pipeline used by tests that already staged (keeps byte
     /// cleanup in one place).
     func restoreFromStaged(_ staged: URL) throws -> UUID {
-        var writtenDocumentURLs: [URL] = []
+        var writtenURLs: [URL] = []
         do {
             let manifest = try readStagedManifest(stagedDirectory: staged)
             let validated = try validate(stagedManifest: manifest, stagedDirectory: staged)
@@ -313,14 +333,24 @@ public final class BackupService {
                 }
                 let url = directory
                     .appendingPathComponent(document.relativePath.components(separatedBy: "/").last ?? document.relativePath)
-                try bytes.write(to: url)
-                writtenDocumentURLs.append(url)
+                try bytes.write(to: url, options: .withoutOverwriting)
+                writtenURLs.append(url)
+            }
+            let photosDir = repository.photosDirectoryURL()
+            try FileManager.default.createDirectory(at: photosDir, withIntermediateDirectories: true)
+            for photo in bundle.manifest.photos {
+                guard let bytes = bundle.photoBytes[photo.id] else {
+                    throw BackupError.missingFile(entry: photo.relativePath)
+                }
+                let url = repository.photoFileURL(photo.relativePath)
+                try bytes.write(to: url, options: .withoutOverwriting)
+                writtenURLs.append(url)
             }
             let newProjectID = try repository.insertRestoredProject(bundle)
             try? FileManager.default.removeItem(at: staged)
             return newProjectID
         } catch {
-            for url in writtenDocumentURLs { try? FileManager.default.removeItem(at: url) }
+            for url in writtenURLs { try? FileManager.default.removeItem(at: url) }
             try? FileManager.default.removeItem(at: staged)
             throw error
         }
