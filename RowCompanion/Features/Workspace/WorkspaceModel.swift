@@ -421,6 +421,10 @@ public final class WorkspaceModel {
         catch { reportPersist(error); loadDetails() }
     }
 
+    public func photoBytes(for photo: ProgressPhotoRecord) -> Data? {
+        try? repository.photoFileBytes(photo.id)
+    }
+
     public func describeProgressPhoto(_ id: UUID, text: String) {
         do { try repository.setPhotoDescription(text, for: id); loadDetails() }
         catch { reportPersist(error); loadDetails() }

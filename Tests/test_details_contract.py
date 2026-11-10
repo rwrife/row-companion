@@ -52,6 +52,15 @@ class DetailsContract(unittest.TestCase):
         self.assertIn("photoBytes", service)
         self.assertIn("photosDirectoryName", service)
 
+    def test_photo_preview_reads_through_bounded_verified_repository(self):
+        layout = text("Features/Workspace/WorkspaceLayout.swift")
+        self.assertIn("photoBytes(for: photo)", layout)
+        self.assertIn("photoFileBytes(photo.id)", text("Features/Workspace/WorkspaceModel.swift"))
+        self.assertNotIn("UIImage(contentsOfFile:", layout)
+        tests = (APP.parent / "RowCompanionTests/PhotoRepositoryTests.swift").read_text()
+        self.assertIn("testPhotoFileBytesRejectsOversizedReplacementAndSymlink", tests)
+        self.assertIn("testPhotoFileBytesReadsStoredPhoto", tests)
+
     def test_photo_native_tests_cover_missing_media_and_rollback(self):
         tests = (APP.parent / "RowCompanionTests/PhotoRepositoryTests.swift").read_text()
         for name in ("testPhotoPersistenceDuplicateAndDelete",

@@ -105,6 +105,16 @@ final class PhotoRepositoryTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: repo.photoFileURL(try XCTUnwrap(restoredPhotos.first).relativePath).path))
     }
 
+    func testPhotoFileBytesReadsStoredPhoto() throws {
+        let url = try temporaryStoreURL()
+        defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+        let repo = try RowRepository(storeURL: url)
+        let projectID = try repo.createProject(title: "Preview").id
+        let data = sampleJPEGData()
+        let photo = try repo.attachPhoto(data: data, description: "Preview", ownerID: projectID)
+        XCTAssertEqual(try repo.photoFileBytes(photo.id), data)
+    }
+
     func testPhotoFileBytesRejectsOversizedReplacementAndSymlink() throws {
         let url = try temporaryStoreURL()
         defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
