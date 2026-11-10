@@ -781,7 +781,7 @@ private struct DetailsEditor: View {
                     }
                     ForEach(model.progressPhotos) { photo in
                         HStack {
-                            if let image = UIImage(contentsOfFile: model.progressPhotoURL(photo).path) {
+                            if let bytes = model.photoBytes(for: photo), let image = UIImage(data: bytes) {
                                 Image(uiImage: image)
                                     .resizable()
                                     .scaledToFit()
